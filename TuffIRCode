@@ -1,4 +1,4 @@
-int irsensor = A0; //sensor is attached on pinA0
+int irsensor = A14; //sensor is attached on pinA0
 byte serialRead = 0; //for control serial communication
 int signalADC = 0; // the read out signal in 0-1023 corresponding to 0-5v
 void setup() {
