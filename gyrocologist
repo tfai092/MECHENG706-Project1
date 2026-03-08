@@ -1,5 +1,12 @@
+float current_theta = A0  // Change for current input pin
+
 float theta = 0;
 unsigned long prev_time;
+
+void setup() {
+// put your setup code here, to run once:
+Serial.begin(115200); // start serial communication
+}
 
 void loop() {
     float omega_z = readGyro(); // rad/s
@@ -9,4 +16,29 @@ void loop() {
     theta += omega_z * dt;   // integrate angular velocity
 
     prev_time = current_time;
+    rotateToZero();
 }
+
+void rotateToZero() {
+    
+    error = theta;
+    effort = error * kp;
+
+    if (error > 0) {
+        cw();
+    }
+    else {
+        ccw();
+    }
+
+    if ((error > -0.5) || (error < 0.5)) {
+        stop();
+    }
+        
+
+}
+
+
+
+
+
