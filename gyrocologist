@@ -1,0 +1,12 @@
+float theta = 0;
+unsigned long prev_time;
+
+void loop() {
+    float omega_z = readGyro(); // rad/s
+    unsigned long current_time = millis();
+    float dt = (current_time - prev_time) / 1000.0;
+
+    theta += omega_z * dt;   // integrate angular velocity
+
+    prev_time = current_time;
+}
