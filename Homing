@@ -1,64 +1,220 @@
+#include <Servo.h>
+#include <math.h>
+
+Servo left_font_motor;
+Servo left_rear_motor;
+Servo right_rear_motor;
+Servo right_font_motor;
+
+//Default motor control pins
+const byte left_front = 46;
+const byte left_rear = 47;
+const byte right_rear = 50;
+const byte right_front = 51;
+
+int speed_val = 200;
+
+int front_short;
+int front_long;
+int rear_short;
+int rear_long;
+
+int sonar_reading;
+
+float distance_fs;
+float distance_fl;
+float distance_rs;
+float distance_rl;
+
+//Default ultrasonic ranging sensor pins, these pins are defined my the Shield
+const int TRIG_PIN = 48;
+const int ECHO_PIN = 49;
 
 int FRONT_SHORT_IR_SENSOR = A14; //sensor is attached on pinA14
 int FRONT_LONG_IR_SENSOR = A13; //sensor is attached on pinA13
 int REAR_SHORT_IR_SENSOR = A15; //sensor is attached on pinA15
 int REAR_LONG_IR_SENSOR = A12; //sensor is attached on pinA12
 
+float sonar_distance;
+
+bool BOTTOM_flag = false;
+bool TOP_flag = false;
+bool LEFT_flag = false;
+bool RIGHT_flag = false;
+
+const int ARENA_SIZE = 300;
+
 byte serialRead = 0; //for control serial communication
 int signalADC = 0; // the read out signal in 0-1023 corresponding to 0-5v
+// -------- SETUP --------
 void setup() {
-// put your setup code here, to run once:
-Serial.begin(115200); // start serial communication
+
+  Serial.begin(115200);
+
+  left_font_motor.attach(left_front);
+  left_rear_motor.attach(left_rear);
+  right_rear_motor.attach(right_rear);
+  right_font_motor.attach(right_front);
+
 }
+
 void loop() {
 
-  // USE GYRO TO FIND ORIENTATION AND THEN ALIGN PARALLEL TO WALLS
+  readSensors();
 
-  // put your main code here, to run repeatedly:
-  if (Serial.available()) { // Check for input from terminal
-    
-    serialRead = Serial.read(); // Read input
+  calculateDistances();
 
-    if (serialRead==49) { // Check for flag to execute, 49 is ascii for 1, stop serial printing
-      Serial.end(); // end the serial communication to get the sensor data
-    }
+  determinePosition();
+
+  moveToCorner();
+
+}
+
+void readSensors() {
+
+  front_short = analogRead(FRONT_SHORT_IR_SENSOR);
+  front_long  = analogRead(FRONT_LONG_IR_SENSOR);
+  rear_short  = analogRead(REAR_SHORT_IR_SENSOR);
+  rear_long   = analogRead(REAR_LONG_IR_SENSOR);
+
+  // FIX SONAR STUFF
+  // sonar_reading = analogRead(SONAR_SENSOR);
+
+}
+
+void calculateDistances() {
+
+  distance_fs = 46161 * pow(front_short, -1.302);
+  distance_fl = 46161 * pow(front_long,  -1.302);
+  distance_rs = 46161 * pow(rear_short, -1.302);
+  distance_rl = 46161 * pow(rear_long,  -1.302);
+
+  // Example sonar conversion (depends on sensor)
+  sonar_distance = sonar_reading * 0.5;
+
+}
+
+void determinePosition() {
+
+  // Reset flags
+  TOP_flag = false;
+  BOTTOM_flag = false;
+  LEFT_flag = false;
+  RIGHT_flag = false;
+
+  // Determine vertical position
+  if (sonar_distance > ARENA_SIZE / 2) {
+    BOTTOM_flag = true;
   }
-
-  // CALCULATE SHORTEST DISTANCE TO CORNERS
-
-  // READ ALL 4 IR SENSORS
-  int front_short = analogRead(FRONT_SHORT_IR_SENSOR);
-  int front_long = analogRead(FRONT_LONG_IR_SENSOR);
-  int rear_short = analogRead(REAR_SHORT_IR_SENSOR);
-  int rear_long = analogRead(REAR_LONG_IR_SENSOR);
-
-  int distance_fs = 46161*pow(front_short,-1.302);
-  int distance_fl = 46161*pow(front_long,-1.302);
-  int distance_rs = 46161*pow(rear_short,-1.302);
-  int distance_rl = 46161*pow(rear_long,-1.302);
-
-  // READ SONAR SENSOR
-  int sonar = analogRead();
-
-  // Validate whether Long or Short IR sensors are providing valid outputs
-
-  // FIND SHORTEST DISTANCE
-
-  if (sonar_distance > (SIZE OF ARENA / 2)) {
-    BOTTOM_flag == True;
   else {
-    TOP_flag == True;
+    TOP_flag = true;
   }
 
-  // CHANGE SHORT/LONG SENSOR DEPENDING ON VALIDITY
-  
-  if (front_long > rear_long) {
-    LEFT_flag == True;
+  // Determine horizontal position
+  if (distance_fl > distance_rl) {
+    LEFT_flag = true;
+  }
   else {
-    RIGHT_flag == True;
+    RIGHT_flag = true;
   }
 
+}
 
+void moveToCorner() {
 
+  if (BOTTOM_flag && LEFT_flag) {
+
+    Serial.println("Moving to bottom left corner");
+    // moveForward();
+    // turnLeft();
+
+  }
+
+  if (BOTTOM_flag && RIGHT_flag) {
+
+    Serial.println("Moving to bottom right corner");
+
+  }
+
+  if (TOP_flag && LEFT_flag) {
+
+    Serial.println("Moving to top left corner");
+
+  }
+
+  if (TOP_flag && RIGHT_flag) {
+
+    Serial.println("Moving to top right corner");
+
+  }
+
+}
+
+void stop() {
+
+  left_font_motor.writeMicroseconds(1500);
+  left_rear_motor.writeMicroseconds(1500);
+  right_rear_motor.writeMicroseconds(1500);
+  right_font_motor.writeMicroseconds(1500);
+
+}
+
+void forward() {
+
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
+
+}
+
+void reverse() {
+
+  left_font_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_font_motor.writeMicroseconds(1500 + speed_val);
+
+}
+
+void ccw() {
+
+  left_font_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
+
+}
+
+void cw() {
+
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_font_motor.writeMicroseconds(1500 + speed_val);
+
+}
+
+void strafe_left() {
+
+  left_font_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
+
+}
+
+void strafe_right() {
+
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 + speed_val);
 
 }
