@@ -1,1 +1,64 @@
 
+int FRONT_SHORT_IR_SENSOR = A14; //sensor is attached on pinA14
+int FRONT_LONG_IR_SENSOR = A13; //sensor is attached on pinA13
+int REAR_SHORT_IR_SENSOR = A15; //sensor is attached on pinA15
+int REAR_LONG_IR_SENSOR = A12; //sensor is attached on pinA12
+
+byte serialRead = 0; //for control serial communication
+int signalADC = 0; // the read out signal in 0-1023 corresponding to 0-5v
+void setup() {
+// put your setup code here, to run once:
+Serial.begin(115200); // start serial communication
+}
+void loop() {
+
+  // USE GYRO TO FIND ORIENTATION AND THEN ALIGN PARALLEL TO WALLS
+
+  // put your main code here, to run repeatedly:
+  if (Serial.available()) { // Check for input from terminal
+    
+    serialRead = Serial.read(); // Read input
+
+    if (serialRead==49) { // Check for flag to execute, 49 is ascii for 1, stop serial printing
+      Serial.end(); // end the serial communication to get the sensor data
+    }
+  }
+
+  // CALCULATE SHORTEST DISTANCE TO CORNERS
+
+  // READ ALL 4 IR SENSORS
+  int front_short = analogRead(FRONT_SHORT_IR_SENSOR);
+  int front_long = analogRead(FRONT_LONG_IR_SENSOR);
+  int rear_short = analogRead(REAR_SHORT_IR_SENSOR);
+  int rear_long = analogRead(REAR_LONG_IR_SENSOR);
+
+  int distance_fs = 46161*pow(front_short,-1.302);
+  int distance_fl = 46161*pow(front_long,-1.302);
+  int distance_rs = 46161*pow(rear_short,-1.302);
+  int distance_rl = 46161*pow(rear_long,-1.302);
+
+  // READ SONAR SENSOR
+  int sonar = analogRead();
+
+  // Validate whether Long or Short IR sensors are providing valid outputs
+
+  // FIND SHORTEST DISTANCE
+
+  if (sonar_distance > (SIZE OF ARENA / 2)) {
+    BOTTOM_flag == True;
+  else {
+    TOP_flag == True;
+  }
+
+  // CHANGE SHORT/LONG SENSOR DEPENDING ON VALIDITY
+  
+  if (front_long > rear_long) {
+    LEFT_flag == True;
+  else {
+    RIGHT_flag == True;
+  }
+
+
+
+
+}
