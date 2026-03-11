@@ -1,12 +1,22 @@
 #include <Wire.h>
 #include <Adafruit_BNO08x.h>
+#include <SoftwareSerial.h>
 
 Adafruit_BNO08x bno08x;
 
 sh2_SensorValue_t sensorValue;
 
+// Serial Data input pin
+#define BLUETOOTH_RX 19
+// Serial Data output pin
+#define BLUETOOTH_TX 18
+
+SoftwareSerial BluetoothSerial(BLUETOOTH_RX, BLUETOOTH_TX);
+
+
 void setup() {
   Serial.begin(115200);
+  BluetoothSerial.begin(115200);
   delay(1000);
 
   if (!bno08x.begin_I2C()) {
@@ -23,6 +33,7 @@ void setup() {
 }
 
 void loop() {
+
 
   if (bno08x.getSensorEvent(&sensorValue)) {
 
@@ -42,9 +53,9 @@ void loop() {
       if (heading < 0)
         heading += 360;
 
-      Serial.print("Compass Heading: ");
-      Serial.print(heading);
-      Serial.println(" degrees");
+      BluetoothSerial.print("Compass Heading: ");
+      BluetoothSerial.print(heading);
+      BluetoothSerial.println(" degrees");
     }
   }
 }
