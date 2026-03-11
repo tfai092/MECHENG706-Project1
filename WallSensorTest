@@ -1,3 +1,4 @@
+
 #include <Servo.h>  //Need for Servo pulse output
 
 //#include <Adafruit_BNO08x.h>  //Need for Gyroscope
@@ -48,6 +49,9 @@ byte serialRead = 0; //for control serial communication
 int signalADCshort = 0; // the read out signal in 0-1023 corresponding to 0-5v
 int signalADClong = 0; // the read out signal in 0-1023 corresponding to 0-5v
 
+float distance1;
+float distance2;
+
 int distance_reading = 0;
 
 int pos = 0;
@@ -81,26 +85,26 @@ void loop() {
       Serial.end(); // end the serial communication to get the sensor data
     }
   }
-  
-  signalADCshort = analogRead(shortirsensor); // the read out is a signal from 0-1023 corresponding to 0-5v
-  signalADClong = analogRead(longirsensor);
-  // For long range sensor
-  float distance2 = 17948*pow(signalADClong,-1.22); // calculate the distance using the datasheet graph
 
   
-  // For short range sensor
-  float distance1 = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
+    signalADCshort = analogRead(shortirsensor); // the read out is a signal from 0-1023 corresponding to 0-5v
+    signalADClong = analogRead(longirsensor);
+    distance2 = 17948*pow(signalADClong,-1.22); // calculate the distance using the datasheet graph
+    // For short range sensor
+    distance1 = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
+    if(distance2 >= 20) {
+      distance_reading = distance2;
+    } else{
+      distance_reading = distance1;
+    } 
+    Serial.print("Long Distance: ");
+    Serial.println(distance2);
 
-  if(distance2 >= 20) {
-    distance_reading = distance2;
-  } else{
-    distance_reading = distance1;
-  }
-
-  while(distance_reading > 10) {
-    reverse();
-  }
-  stop();
+    if (distance2 < 25) {
+      stop();
+    } else {
+      forward();
+    }
 }
 
 void disable_motors() {
