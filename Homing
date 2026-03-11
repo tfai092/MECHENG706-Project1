@@ -61,7 +61,7 @@ const float START_ANGLE = 0;
 
 #define kp 0.1
 
-float current_theta = A0;  // Change for current input pin
+
 
 float theta = 0;
 float error, effort, heading;
@@ -126,6 +126,9 @@ void orientate() {
 }
 
 float readOrientation() {
+
+  float heading = 0;
+
   if (bno08x.getSensorEvent(&sensorValue)) {
 
     if (sensorValue.sensorId == SH2_ROTATION_VECTOR) {
@@ -135,45 +138,41 @@ float readOrientation() {
       float qy = sensorValue.un.rotationVector.j;
       float qz = sensorValue.un.rotationVector.k;
 
-      // Convert quaternion to yaw (heading)
       float yaw = atan2(2.0*(qx*qy + qw*qz),
                         qw*qw + qx*qx - qy*qy - qz*qz);
 
-      float heading = yaw * 180.0 / PI;
+      heading = yaw * 180.0 / PI;
 
       if (heading < 0)
         heading += 360;
     }
   }
+
   return heading;
 }
 
-float readSensors() {
+void readSensors() {
 
   front_short = analogRead(FRONT_SHORT_IR_SENSOR);
   front_long  = analogRead(FRONT_LONG_IR_SENSOR);
   rear_short  = analogRead(REAR_SHORT_IR_SENSOR);
   rear_long   = analogRead(REAR_LONG_IR_SENSOR);
 
-  calculateDistances(front_short, front_long, rear_short, rear_long);
-
-  return front_short, front_long, rear_short, rear_long;
+  calculateDistances();
 }
 
-float calculateDistances(float front_short, float front_long, float rear_short, float rear_long) {
+float calculateDistances() {
 
   distance_fs = 46161 * pow(front_short, -1.302);
   distance_fl = 46161 * pow(front_long,  -1.302);
   distance_rs = 46161 * pow(rear_short, -1.302);
   distance_rl = 46161 * pow(rear_long,  -1.302);
-
-  return front_short, front_long, rear_short, rear_long;
 }
 
 void moveToCorner() {
 
-  reverse()
-  strafe_left()
+  reverse();
+  strafe_left();
 
 }
 
@@ -187,10 +186,11 @@ void stop() {
 }
 
 void forward() {
+  
+  readSensors()
 
-  [front_short, front_long, rear_short, rear_long] = readSensors()
-
-  while (front_longleft_font_motor.writeMicroseconds(1500 + speed_val);
+  while ()
+  front_longleft_font_motor.writeMicroseconds(1500 + speed_val);
   left_rear_motor.writeMicroseconds(1500 + speed_val);
 
   right_rear_motor.writeMicroseconds(1500 - speed_val);
