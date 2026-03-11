@@ -1,5 +1,19 @@
 #include <Servo.h>
 #include <math.h>
+#include <Wire.h>
+#include <Adafruit_BNO08x.h>
+#include <SoftwareSerial.h>
+
+Adafruit_BNO08x bno08x;
+
+sh2_SensorValue_t sensorValue;
+
+// Serial Data input pin
+#define BLUETOOTH_RX 19
+// Serial Data output pin
+#define BLUETOOTH_TX 18
+
+SoftwareSerial BluetoothSerial(BLUETOOTH_RX, BLUETOOTH_TX);
 
 Servo left_font_motor;
 Servo left_rear_motor;
@@ -43,6 +57,8 @@ bool LEFT_flag = false;
 bool RIGHT_flag = false;
 
 const int ARENA_SIZE = 300;
+const float START_ANGLE = 0;
+
 
 byte serialRead = 0; //for control serial communication
 int signalADC = 0; // the read out signal in 0-1023 corresponding to 0-5v
@@ -50,6 +66,18 @@ int signalADC = 0; // the read out signal in 0-1023 corresponding to 0-5v
 void setup() {
 
   Serial.begin(115200);
+  BluetoothSerial.begin(115200);
+
+  if (!bno08x.begin_I2C()) {
+    Serial.println("BNO08X not detected");
+    while (1);
+  }
+  // Enable rotation vector (gives orientation)
+  if (!bno08x.enableReport(SH2_ROTATION_VECTOR)) {
+    Serial.println("Could not enable rotation vector");
+  }
+
+  Serial.println("BNO08X Found!");
 
   left_font_motor.attach(left_front);
   left_rear_motor.attach(left_rear);
@@ -60,93 +88,74 @@ void setup() {
 
 void loop() {
 
-  readSensors();
-
-  calculateDistances();
-
-  determinePosition();
-
+  // Orientate position
+  orientate();
+  // Move to top left corner
   moveToCorner();
 
 }
 
-void readSensors() {
+void orientate() {
+  float angle = readOrientation();
+  if (angle > START_ANGLE) {
+    while (angle > START_ANGLE) {
+      ccw();
+    }
+  } else if (angle < START_ANGLE) {
+    cw();
+  }
+  
+}
+
+float readOrientation {
+  if (bno08x.getSensorEvent(&sensorValue)) {
+
+    if (sensorValue.sensorId == SH2_ROTATION_VECTOR) {
+
+      float qw = sensorValue.un.rotationVector.real;
+      float qx = sensorValue.un.rotationVector.i;
+      float qy = sensorValue.un.rotationVector.j;
+      float qz = sensorValue.un.rotationVector.k;
+
+      // Convert quaternion to yaw (heading)
+      float yaw = atan2(2.0*(qx*qy + qw*qz),
+                        qw*qw + qx*qx - qy*qy - qz*qz);
+
+      float heading = yaw * 180.0 / PI;
+
+      if (heading < 0)
+        heading += 360;
+    }
+  }
+  return heading;
+}
+
+float readSensors() {
 
   front_short = analogRead(FRONT_SHORT_IR_SENSOR);
   front_long  = analogRead(FRONT_LONG_IR_SENSOR);
   rear_short  = analogRead(REAR_SHORT_IR_SENSOR);
   rear_long   = analogRead(REAR_LONG_IR_SENSOR);
 
-  // FIX SONAR STUFF
-  // sonar_reading = analogRead(SONAR_SENSOR);
+  calculateDistances(front_short, front_long, rear_short, rear_long);
 
+  return front_short, front_long, rear_short, rear_long;
 }
 
-void calculateDistances() {
+float calculateDistances(float front_short, float front_long, float rear_short, float rear_long) {
 
   distance_fs = 46161 * pow(front_short, -1.302);
   distance_fl = 46161 * pow(front_long,  -1.302);
   distance_rs = 46161 * pow(rear_short, -1.302);
   distance_rl = 46161 * pow(rear_long,  -1.302);
 
-  // Example sonar conversion (depends on sensor)
-  sonar_distance = sonar_reading * 0.5;
-
-}
-
-void determinePosition() {
-
-  // Reset flags
-  TOP_flag = false;
-  BOTTOM_flag = false;
-  LEFT_flag = false;
-  RIGHT_flag = false;
-
-  // Determine vertical position
-  if (sonar_distance > ARENA_SIZE / 2) {
-    BOTTOM_flag = true;
-  }
-  else {
-    TOP_flag = true;
-  }
-
-  // Determine horizontal position
-  if (distance_fl > distance_rl) {
-    LEFT_flag = true;
-  }
-  else {
-    RIGHT_flag = true;
-  }
-
+  return front_short, front_long, rear_short, rear_long;
 }
 
 void moveToCorner() {
 
-  if (BOTTOM_flag && LEFT_flag) {
-
-    Serial.println("Moving to bottom left corner");
-    // moveForward();
-    // turnLeft();
-
-  }
-
-  if (BOTTOM_flag && RIGHT_flag) {
-
-    Serial.println("Moving to bottom right corner");
-
-  }
-
-  if (TOP_flag && LEFT_flag) {
-
-    Serial.println("Moving to top left corner");
-
-  }
-
-  if (TOP_flag && RIGHT_flag) {
-
-    Serial.println("Moving to top right corner");
-
-  }
+  reverse()
+  strafe_left()
 
 }
 
@@ -161,7 +170,9 @@ void stop() {
 
 void forward() {
 
-  left_font_motor.writeMicroseconds(1500 + speed_val);
+  [front_short, front_long, rear_short, rear_long] = readSensors()
+
+  while (front_longleft_font_motor.writeMicroseconds(1500 + speed_val);
   left_rear_motor.writeMicroseconds(1500 + speed_val);
 
   right_rear_motor.writeMicroseconds(1500 - speed_val);
