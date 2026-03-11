@@ -1,4 +1,5 @@
 
+
 #include <Servo.h>  //Need for Servo pulse output
 
 //#include <Adafruit_BNO08x.h>  //Need for Gyroscope
@@ -43,14 +44,17 @@ int speed_change;
 //Serial Pointer
 HardwareSerial *SerialCom;
 
-int shortirsensor = A13; //sensor is attached on pinA0
-int longirsensor = A14;
+int FRONT_SHORT_IR_SENSOR = A14; //sensor is attached on pinA14
+int FRONT_LONG_IR_SENSOR = A13; //sensor is attached on pinA13
+int REAR_SHORT_IR_SENSOR = A15; //sensor is attached on pinA15
+int REAR_LONG_IR_SENSOR = A12; //sensor is attached on pinA12
+
 byte serialRead = 0; //for control serial communication
 int signalADCshort = 0; // the read out signal in 0-1023 corresponding to 0-5v
 int signalADClong = 0; // the read out signal in 0-1023 corresponding to 0-5v
 
-float distance1;
-float distance2;
+float distance_short;
+float distance_long;
 
 int distance_reading = 0;
 
@@ -87,20 +91,20 @@ void loop() {
   }
 
   
-    signalADCshort = analogRead(shortirsensor); // the read out is a signal from 0-1023 corresponding to 0-5v
-    signalADClong = analogRead(longirsensor);
-    distance2 = 17948*pow(signalADClong,-1.22); // calculate the distance using the datasheet graph
+    signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR); // the read out is a signal from 0-1023 corresponding to 0-5v
+    signalADClong = analogRead(FRONT_LONG_IR_SENSOR);
+    distance_long = 17948*pow(signalADClong,-1.22); // calculate the distance using the datasheet graph
     // For short range sensor
-    distance1 = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
-    if(distance2 >= 20) {
-      distance_reading = distance2;
+    distance_short = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
+    if(distance_long >= 20) {
+      distance_reading = distance_long;
     } else{
-      distance_reading = distance1;
+      distance_reading = distance_short;
     } 
     Serial.print("Long Distance: ");
-    Serial.println(distance2);
+    Serial.println(distance_long);
 
-    if (distance2 < 25) {
+    if (distance_long < 25) {
       stop();
     } else {
       forward();
