@@ -59,6 +59,15 @@ bool RIGHT_flag = false;
 const int ARENA_SIZE = 300;
 const float START_ANGLE = 0;
 
+#define kp 0.1
+
+float current_theta = A0;  // Change for current input pin
+
+float theta = 0;
+float error, effort, heading;
+unsigned long prev_time;
+
+float perpen = 334;  // Angle at wall
 
 byte serialRead = 0; //for control serial communication
 int signalADC = 0; // the read out signal in 0-1023 corresponding to 0-5v
@@ -96,14 +105,22 @@ void loop() {
 }
 
 void orientate() {
-  float angle = readOrientation();
-  if (angle > START_ANGLE) {
-    while (angle > START_ANGLE) {
-      ccw();
+    error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
+    effort = error * kp;  // Control effort
+
+    if (error > 0) {
+    Serial.print("CW ");
+        cw();
     }
-  } else if (angle < START_ANGLE) {
-    cw();
-  }
+    else {
+    Serial.print("CCW ");
+
+        ccw();
+    }
+
+    if (abs(error) < 0.2) {
+        stop();
+    }
   
 }
 
@@ -191,23 +208,17 @@ void reverse() {
 }
 
 void ccw() {
-
-  left_font_motor.writeMicroseconds(1500 - speed_val);
-  left_rear_motor.writeMicroseconds(1500 - speed_val);
-
-  right_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_font_motor.writeMicroseconds(1500 - speed_val);
-
+  left_font_motor.writeMicroseconds((1500 - speed_val) * effort);
+  left_rear_motor.writeMicroseconds((1500 - speed_val) * effort);
+  right_rear_motor.writeMicroseconds((1500 - speed_val) * effort);
+  right_font_motor.writeMicroseconds((1500 - speed_val) * effort);
 }
 
 void cw() {
-
-  left_font_motor.writeMicroseconds(1500 + speed_val);
-  left_rear_motor.writeMicroseconds(1500 + speed_val);
-
-  right_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_font_motor.writeMicroseconds(1500 + speed_val);
-
+  left_font_motor.writeMicroseconds((1500 + speed_val) * effort);
+  left_rear_motor.writeMicroseconds((1500 + speed_val) * effort);
+  right_rear_motor.writeMicroseconds((1500 + speed_val) * effort);
+  right_font_motor.writeMicroseconds((1500 + speed_val) * effort);
 }
 
 void strafe_left() {
