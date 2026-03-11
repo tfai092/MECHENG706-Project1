@@ -105,6 +105,7 @@ void loop() {
 }
 
 void orientate() {
+    readOrientation();
     error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
     effort = error * kp;  // Control effort
 
@@ -124,7 +125,7 @@ void orientate() {
   
 }
 
-float readOrientation {
+float readOrientation() {
   if (bno08x.getSensorEvent(&sensorValue)) {
 
     if (sensorValue.sensorId == SH2_ROTATION_VECTOR) {
