@@ -64,7 +64,8 @@ const float START_ANGLE = 0;
 
 
 float theta = 0;
-float error, effort, heading;
+float error, effort;
+float heading = 0;
 unsigned long prev_time;
 
 float perpen = 334;  // Angle at wall
@@ -104,30 +105,8 @@ void loop() {
 
 }
 
-void orientate() {
-    readOrientation();
-    error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
-    effort = error * kp;  // Control effort
+void readOrientation() {
 
-    if (error > 0) {
-    Serial.print("CW ");
-        cw();
-    }
-    else {
-    Serial.print("CCW ");
-
-        ccw();
-    }
-
-    if (abs(error) < 0.2) {
-        stop();
-    }
-  
-}
-
-float readOrientation() {
-
-  float heading = 0;
 
   if (bno08x.getSensorEvent(&sensorValue)) {
 
@@ -147,9 +126,34 @@ float readOrientation() {
         heading += 360;
     }
   }
-
-  return heading;
 }
+
+void orientate() {
+
+  while(1) {
+    readOrientation();
+    error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
+    effort = error * kp;  // Control effort
+
+    if (error > 0) {
+    // Serial.println("CW ");
+        cw();
+    }
+    else {
+    // Serial.println("CCW ");
+
+        ccw();
+    }
+    Serial.println(error);
+
+
+    if (abs(error) < 10) {
+        stop();
+        return;
+    }
+  }
+}
+
 
 void readSensors() {
 
@@ -187,10 +191,10 @@ void stop() {
 
 void forward() {
   
-  readSensors()
+  readSensors();
 
-  while ()
-  front_longleft_font_motor.writeMicroseconds(1500 + speed_val);
+  //while ()
+  left_font_motor.writeMicroseconds(1500 + speed_val);
   left_rear_motor.writeMicroseconds(1500 + speed_val);
 
   right_rear_motor.writeMicroseconds(1500 - speed_val);
@@ -209,17 +213,17 @@ void reverse() {
 }
 
 void ccw() {
-  left_font_motor.writeMicroseconds((1500 - speed_val) * effort);
-  left_rear_motor.writeMicroseconds((1500 - speed_val) * effort);
-  right_rear_motor.writeMicroseconds((1500 - speed_val) * effort);
-  right_font_motor.writeMicroseconds((1500 - speed_val) * effort);
+  left_font_motor.writeMicroseconds((1500 - speed_val));
+  left_rear_motor.writeMicroseconds((1500 - speed_val));
+  right_rear_motor.writeMicroseconds((1500 - speed_val));
+  right_font_motor.writeMicroseconds((1500 - speed_val));
 }
 
 void cw() {
-  left_font_motor.writeMicroseconds((1500 + speed_val) * effort);
-  left_rear_motor.writeMicroseconds((1500 + speed_val) * effort);
-  right_rear_motor.writeMicroseconds((1500 + speed_val) * effort);
-  right_font_motor.writeMicroseconds((1500 + speed_val) * effort);
+  left_font_motor.writeMicroseconds((1500 + speed_val));
+  left_rear_motor.writeMicroseconds((1500 + speed_val));
+  right_rear_motor.writeMicroseconds((1500 + speed_val));
+  right_font_motor.writeMicroseconds((1500 + speed_val));
 }
 
 void strafe_left() {
