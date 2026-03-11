@@ -1,0 +1,50 @@
+#include <Wire.h>
+#include <Adafruit_BNO08x.h>
+
+Adafruit_BNO08x bno08x;
+
+sh2_SensorValue_t sensorValue;
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  if (!bno08x.begin_I2C()) {
+    Serial.println("BNO08X not detected");
+    while (1);
+  }
+
+  Serial.println("BNO08X Found!");
+
+  // Enable rotation vector (gives orientation)
+  if (!bno08x.enableReport(SH2_ROTATION_VECTOR)) {
+    Serial.println("Could not enable rotation vector");
+  }
+}
+
+void loop() {
+
+  if (bno08x.getSensorEvent(&sensorValue)) {
+
+    if (sensorValue.sensorId == SH2_ROTATION_VECTOR) {
+
+      float qw = sensorValue.un.rotationVector.real;
+      float qx = sensorValue.un.rotationVector.i;
+      float qy = sensorValue.un.rotationVector.j;
+      float qz = sensorValue.un.rotationVector.k;
+
+      // Convert quaternion to yaw (heading)
+      float yaw = atan2(2.0*(qx*qy + qw*qz),
+                        qw*qw + qx*qx - qy*qy - qz*qz);
+
+      float heading = yaw * 180.0 / PI;
+
+      if (heading < 0)
+        heading += 360;
+
+      Serial.print("Compass Heading: ");
+      Serial.print(heading);
+      Serial.println(" degrees");
+    }
+  }
+}
