@@ -101,51 +101,8 @@ void setup(void) {
 
 void loop() {
 
-  // put your main code here, to run repeatedly:
-  if (Serial.available()) { // Check for input from terminal
-    
-    serialRead = Serial.read(); // Read input
+  move_forward();
 
-    if (serialRead == 49) { // Check for flag to execute, 49 is ascii for 1, stop serial printing
-      Serial.end(); // end the serial communication to get the sensor data
-    }
-  }
-  
-  switch(state) {
-    case HOMING:
-      homing();
-      state = FORWARD;
-      prevState = HOMING;
-      break;
-
-    case FORWARD:
-      move_forward();
-      state = RIGHT;
-      prevState = FORWARD;
-      break;
-
-    case RIGHT:
-      move_right();
-      if (prevState == FORWARD) {
-        state = BACKWARD;
-      } else {
-        state = FORWARD;
-      }
-      prevState = RIGHT;
-      break;
-
-    case BACKWARD:
-      move_backward();
-      state = RIGHT;
-      prevState = BACKWARD;
-      break;
-
-    case STOP:
-      stop();
-      disable_motors();
-      prevState = STOP;
-      break;
-  }
 }
 
   void homing() {
