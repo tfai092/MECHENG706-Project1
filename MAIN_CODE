@@ -183,76 +183,27 @@ void loop() {
 
   void move_right() {
     float starting_distance = 0;
-    // Clear trigger
-    digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
-
-    // Send 10µs pulse
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPin, LOW);
-
-    // Read echo time
-    duration = pulseIn(echoPin, HIGH);
 
     // Convert time to distance
-    distance_cm = duration * 0.0343 / 2;
+    distance_cm = read_sonar();
     starting_distance = distance_cm;
 
     while (distance_cm < (starting_distance + robot_width)) {
       strafe_right(0.1 * ((starting_distance + robot_width) - distance_cm));
-      // Clear trigger
-      digitalWrite(trigPin, LOW);
-      delayMicroseconds(2);
-
-      // Send 10µs pulse
-      digitalWrite(trigPin, HIGH);
-      delayMicroseconds(10);
-      digitalWrite(trigPin, LOW);
-
-      // Read echo time
-      duration = pulseIn(echoPin, HIGH);
-
-      // Convert time to distance
-      distance_cm = duration * 0.0343 / 2;
+      distance_cm = read_sonar();
     }
     stop();
   }
 
   void move_left() {
     float starting_distance = 0;
-    // Clear trigger
-    digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
 
-    // Send 10µs pulse
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPin, LOW);
-
-    // Read echo time
-    duration = pulseIn(echoPin, HIGH);
-
-    // Convert time to distance
-    distance_cm = duration * 0.0343 / 2;
+    distance_cm = read_sonar();
     starting_distance = distance_cm;
 
     while (distance_cm > 15) {
       strafe_left(0.1 * distance_cm);
-      // Clear trigger
-      digitalWrite(trigPin, LOW);
-      delayMicroseconds(2);
-
-      // Send 10µs pulse
-      digitalWrite(trigPin, HIGH);
-      delayMicroseconds(10);
-      digitalWrite(trigPin, LOW);
-
-      // Read echo time
-      duration = pulseIn(echoPin, HIGH);
-
-      // Convert time to distance
-      distance_cm = duration * 0.0343 / 2;
+      distance_cm = read_sonar();
     }
     stop();
   }
@@ -319,6 +270,25 @@ void readOrientation() {
         heading += 360;
     }
   }
+}
+
+int read_sonar() {
+  // Clear trigger
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  // Send 10µs pulse
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Read echo time
+  duration = pulseIn(echoPin, HIGH);
+
+  // Convert time to distance
+  distance_cm = duration * 0.0343 / 2;
+
+  return distance_cm;
 }
 
 void disable_motors() {
