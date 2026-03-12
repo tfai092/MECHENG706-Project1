@@ -24,10 +24,6 @@ long duration;
 // Declare robot width (cm)
 float robot_width = 25;
 
-//Default ultrasonic ranging sensor pins, these pins are defined my the Shield
-const int TRIG_PIN = 48;
-const int ECHO_PIN = 49;
-
 // For Homing
 float error, effort;
 float heading = 0;
@@ -41,10 +37,10 @@ float perpen = 334;  // Angle at wall
 
 SoftwareSerial BluetoothSerial(BLUETOOTH_RX, BLUETOOTH_TX);
 
-Servo left_font_motor;   // create servo object to control Vex Motor Controller 29
+Servo left_front_motor;   // create servo object to control Vex Motor Controller 29
 Servo left_rear_motor;   // create servo object to control Vex Motor Controller 29
 Servo right_rear_motor;  // create servo object to control Vex Motor Controller 29
-Servo right_font_motor;  // create servo object to control Vex Motor Controller 29
+Servo right_front_motor;  // create servo object to control Vex Motor Controller 29
 Servo turret_motor;
 
 int speed_val = 100;
@@ -72,24 +68,30 @@ enum State {
     HOMING,
     FORWARD,
     RIGHT,
-    LEFT,
     BACKWARD,
     STOP
   };
 
 State state = HOMING;
+State prevState = HOMING;
 
 void setup(void) {
 
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
+  digitalWrite(trigPin, LOW);
 
   turret_motor.attach(11);
   pinMode(LED_BUILTIN, OUTPUT);
 
-  // The Trigger pin will tell the sensor to range find
-  pinMode(TRIG_PIN, OUTPUT);
-  digitalWrite(TRIG_PIN, LOW);
+  // Setup Gyro
+  if (!bno08x.begin_I2C()) {
+    Serial.println("BNO08x not detected");
+    while (1);
+  }
+
+  // Enable rotation vector reporting AFTER successful initialization
+  bno08x.enableReport(SH2_ROTATION_VECTOR);
 
   // Setup the Serial port and pointer, the pointer allows switching the debug info through the USB port(Serial) or Bluetooth port(Serial1) with ease.
   Serial.begin(115200);
@@ -113,31 +115,35 @@ void loop() {
     case HOMING:
       homing();
       state = FORWARD;
+      prevState = HOMING;
       break;
 
     case FORWARD:
       move_forward();
       state = RIGHT;
+      prevState = FORWARD;
       break;
 
     case RIGHT:
       move_right();
-      state = BACKWARD;
-      break;
-
-    case LEFT:
-      move_left();
-      state = FORWARD;
+      if (prevState == FORWARD) {
+        state = BACKWARD;
+      } else {
+        state = FORWARD;
+      }
+      prevState = RIGHT;
       break;
 
     case BACKWARD:
       move_backward();
       state = RIGHT;
+      prevState = BACKWARD;
       break;
 
     case STOP:
       stop();
       disable_motors();
+      prevState = STOP;
       break;
   }
 }
@@ -152,7 +158,6 @@ void loop() {
 
   void move_forward() {
     float speed = 0;
-    forward(speed);
 
     signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR); // the read out is a signal from 0-1023 corresponding to 0-5v
     signalADClong = analogRead(FRONT_LONG_IR_SENSOR);
@@ -165,14 +170,15 @@ void loop() {
     while (distance_long >= 25) {
       signalADClong = analogRead(FRONT_LONG_IR_SENSOR);
       distance_long = 17948*pow(signalADClong,-1.22);
-      forward(0.5 * signalADClong);
+      forward(0.1 * signalADClong);
     }
 
     while (distance_short >= 15) {
       signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
       distance_short = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
-      forward(0.5 * signalADCshort);
+      forward(0.1 * signalADCshort);
     }
+    stop();
   } 
 
   void move_right() {
@@ -194,7 +200,7 @@ void loop() {
     starting_distance = distance_cm;
 
     while (distance_cm < (starting_distance + robot_width)) {
-      strafe_right(0.5 * ((starting_distance + robot_width) - distance_cm));
+      strafe_right(0.1 * ((starting_distance + robot_width) - distance_cm));
       // Clear trigger
       digitalWrite(trigPin, LOW);
       delayMicroseconds(2);
@@ -210,6 +216,7 @@ void loop() {
       // Convert time to distance
       distance_cm = duration * 0.0343 / 2;
     }
+    stop();
   }
 
   void move_left() {
@@ -231,7 +238,7 @@ void loop() {
     starting_distance = distance_cm;
 
     while (distance_cm > 15) {
-      strafe_left(0.5 * distance_cm);
+      strafe_left(0.1 * distance_cm);
       // Clear trigger
       digitalWrite(trigPin, LOW);
       delayMicroseconds(2);
@@ -247,11 +254,11 @@ void loop() {
       // Convert time to distance
       distance_cm = duration * 0.0343 / 2;
     }
+    stop();
   }
 
   void move_backward() {
     float speed = 0;
-    reverse(speed);
 
     signalADCshort = analogRead(REAR_SHORT_IR_SENSOR); // the read out is a signal from 0-1023 corresponding to 0-5v
     signalADClong = analogRead(REAR_LONG_IR_SENSOR);
@@ -264,23 +271,25 @@ void loop() {
     while (distance_long >= 25) {
       signalADClong = analogRead(REAR_LONG_IR_SENSOR);
       distance_long = 17948*pow(signalADClong,-1.22);
-      reverse(0.5 * signalADClong);
+      reverse(0.1 * signalADClong);
     }
 
     while (distance_short >= 15) {
       signalADCshort = analogRead(REAR_SHORT_IR_SENSOR);
       distance_short = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
-      reverse(0.5 * signalADCshort);
+      reverse(0.1 * signalADCshort);
     }
+    stop();
   }
 
 void orientate() {
   readOrientation();
   error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
 
-  while (abs(error) <2) {
+  while (abs(error) > 2) {
+    readOrientation();
     error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
-    effort = error * 0.5;  // Control effort
+    effort = error * 0.1;  // Control effort
 
     if (error > 0) {
       // Serial.println("CW ");
@@ -313,10 +322,10 @@ void readOrientation() {
 }
 
 void disable_motors() {
-  left_font_motor.detach();   // detach the servo on pin left_front to turn Vex Motor Controller 29 Off
+  left_front_motor.detach();   // detach the servo on pin left_front to turn Vex Motor Controller 29 Off
   left_rear_motor.detach();   // detach the servo on pin left_rear to turn Vex Motor Controller 29 Off
   right_rear_motor.detach();  // detach the servo on pin right_rear to turn Vex Motor Controller 29 Off
-  right_font_motor.detach();  // detach the servo on pin right_front to turn Vex Motor Controller 29 Off
+  right_front_motor.detach();  // detach the servo on pin right_front to turn Vex Motor Controller 29 Off
 
   pinMode(left_front, INPUT);
   pinMode(left_rear, INPUT);
@@ -325,58 +334,58 @@ void disable_motors() {
 }
 
 void enable_motors() {
-  left_font_motor.attach(left_front);    // attaches the servo on pin left_front to turn Vex Motor Controller 29 On
+  left_front_motor.attach(left_front);    // attaches the servo on pin left_front to turn Vex Motor Controller 29 On
   left_rear_motor.attach(left_rear);     // attaches the servo on pin left_rear to turn Vex Motor Controller 29 On
   right_rear_motor.attach(right_rear);   // attaches the servo on pin right_rear to turn Vex Motor Controller 29 On
-  right_font_motor.attach(right_front);  // attaches the servo on pin right_front to turn Vex Motor Controller 29 On
+  right_front_motor.attach(right_front);  // attaches the servo on pin right_front to turn Vex Motor Controller 29 On
 }
 
 void stop()
 {
-  left_font_motor.writeMicroseconds(1500);
+  left_front_motor.writeMicroseconds(1500);
   left_rear_motor.writeMicroseconds(1500);
   right_rear_motor.writeMicroseconds(1500);
-  right_font_motor.writeMicroseconds(1500);
+  right_front_motor.writeMicroseconds(1500);
 }
 
 void forward(float speed_forward) {
-  left_font_motor.writeMicroseconds(1500 + speed_forward);
+  left_front_motor.writeMicroseconds(1500 + speed_forward);
   left_rear_motor.writeMicroseconds(1500 + speed_forward);
   right_rear_motor.writeMicroseconds(1500 - speed_forward);
-  right_font_motor.writeMicroseconds(1500 - speed_forward);
+  right_front_motor.writeMicroseconds(1500 - speed_forward);
 }
 
 void reverse(float speed_backward) {
-  left_font_motor.writeMicroseconds(1500 - speed_backward);
+  left_front_motor.writeMicroseconds(1500 - speed_backward);
   left_rear_motor.writeMicroseconds(1500 - speed_backward);
   right_rear_motor.writeMicroseconds(1500 + speed_backward);
-  right_font_motor.writeMicroseconds(1500 + speed_backward);
+  right_front_motor.writeMicroseconds(1500 + speed_backward);
 }
 
 void ccw(float speed_ccw) {
-  left_font_motor.writeMicroseconds(1500 - speed_ccw);
+  left_front_motor.writeMicroseconds(1500 - speed_ccw);
   left_rear_motor.writeMicroseconds(1500 - speed_ccw);
   right_rear_motor.writeMicroseconds(1500 - speed_ccw);
-  right_font_motor.writeMicroseconds(1500 - speed_ccw);
+  right_front_motor.writeMicroseconds(1500 - speed_ccw);
 }
 
 void cw(float speed_cw) {
-  left_font_motor.writeMicroseconds(1500 + speed_cw);
+  left_front_motor.writeMicroseconds(1500 + speed_cw);
   left_rear_motor.writeMicroseconds(1500 + speed_cw);
   right_rear_motor.writeMicroseconds(1500 + speed_cw);
-  right_font_motor.writeMicroseconds(1500 + speed_cw);
+  right_front_motor.writeMicroseconds(1500 + speed_cw);
 }
 
 void strafe_left(float speed_left) {
-  left_font_motor.writeMicroseconds(1500 - speed_left);
+  left_front_motor.writeMicroseconds(1500 - speed_left);
   left_rear_motor.writeMicroseconds(1500 + speed_left);
   right_rear_motor.writeMicroseconds(1500 + speed_left);
-  right_font_motor.writeMicroseconds(1500 - speed_left);
+  right_front_motor.writeMicroseconds(1500 - speed_left);
 }
 
 void strafe_right(float speed_right) {
-  left_font_motor.writeMicroseconds(1500 + speed_right);
+  left_front_motor.writeMicroseconds(1500 + speed_right);
   left_rear_motor.writeMicroseconds(1500 - speed_right);
   right_rear_motor.writeMicroseconds(1500 - speed_right);
-  right_font_motor.writeMicroseconds(1500 + speed_right);
+  right_front_motor.writeMicroseconds(1500 + speed_right);
 }
