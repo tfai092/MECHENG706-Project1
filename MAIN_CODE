@@ -27,8 +27,7 @@ float robot_width = 25;
 // For Homing
 float error, effort;
 float heading = 0;
-float perpen = 334;  // Angle at wall
-
+float perpen = 140;  // Angle at wall
 
 // Serial Data input pin
 #define BLUETOOTH_RX 19
@@ -72,7 +71,7 @@ enum State {
     STOP
   };
 
-State state = HOMING;
+State state = FORWARD;
 State prevState = HOMING;
 
 void setup(void) {
@@ -149,14 +148,19 @@ void loop() {
 }
 
   void homing() {
+    BluetoothSerial.println("Homing");
     // Orientate position
     orientate();
+    _delay_ms(500);
     // Move to top left corner
     move_backward();
+    _delay_ms(500);
     move_left();
+    _delay_ms(500);
   }
 
   void move_forward() {
+    BluetoothSerial.println("moving forward");
     float speed = 0;
 
     signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR); // the read out is a signal from 0-1023 corresponding to 0-5v
@@ -182,24 +186,48 @@ void loop() {
   } 
 
   void move_right() {
+    BluetoothSerial.println("Going Right");
     float starting_distance = 0;
+    // Clear trigger
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+
+    // Send 10µs pulse
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+    // Read echo time
+    duration = pulseIn(echoPin, HIGH);
 
     // Convert time to distance
-    distance_cm = read_sonar();
+    distance_cm = duration * 0.0343 / 2;
     starting_distance = distance_cm;
 
     while (distance_cm < (starting_distance + robot_width)) {
       strafe_right(0.1 * ((starting_distance + robot_width) - distance_cm));
-      distance_cm = read_sonar();
+      // Clear trigger
+      digitalWrite(trigPin, LOW);
+      delayMicroseconds(2);
+
+      // Send 10µs pulse
+      digitalWrite(trigPin, HIGH);
+      delayMicroseconds(10);
+      digitalWrite(trigPin, LOW);
+
+      // Read echo time
+      duration = pulseIn(echoPin, HIGH);
+
+      // Convert time to distance
+      distance_cm = duration * 0.0343 / 2;
     }
     stop();
   }
 
   void move_left() {
+    BluetoothSerial.println("Going Left");
     float starting_distance = 0;
-
-    distance_cm = read_sonar();
-    starting_distance = distance_cm;
+    starting_distance = read_sonar();
 
     while (distance_cm > 15) {
       strafe_left(0.1 * distance_cm);
@@ -209,6 +237,7 @@ void loop() {
   }
 
   void move_backward() {
+    BluetoothSerial.println("Going Backward");
     float speed = 0;
 
     signalADCshort = analogRead(REAR_SHORT_IR_SENSOR); // the read out is a signal from 0-1023 corresponding to 0-5v
@@ -218,17 +247,16 @@ void loop() {
     distance_long = 17948*pow(signalADClong,-1.22); // calculate the distance using the datasheet graph
     // For short range sensor
     distance_short = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
-
-    while (distance_long >= 25) {
+    while (distance_long >= 10) {
       signalADClong = analogRead(REAR_LONG_IR_SENSOR);
       distance_long = 17948*pow(signalADClong,-1.22);
-      reverse(0.1 * signalADClong);
+      reverse(5 * signalADClong);
     }
 
     while (distance_short >= 15) {
       signalADCshort = analogRead(REAR_SHORT_IR_SENSOR);
       distance_short = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
-      reverse(0.1 * signalADCshort);
+      reverse(5 * signalADCshort);
     }
     stop();
   }
@@ -238,9 +266,10 @@ void orientate() {
   error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
 
   while (abs(error) > 2) {
+    BluetoothSerial.println(heading);
     readOrientation();
     error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
-    effort = error * 0.1;  // Control effort
+    effort = error * 5;  // Control effort
 
     if (error > 0) {
       // Serial.println("CW ");
@@ -254,6 +283,7 @@ void orientate() {
 }
 
 void readOrientation() {
+  BluetoothSerial.println("Reading Orientation");
 
   if (bno08x.getSensorEvent(&sensorValue)) {
     if (sensorValue.sensorId == SH2_ROTATION_VECTOR) {
@@ -270,25 +300,6 @@ void readOrientation() {
         heading += 360;
     }
   }
-}
-
-int read_sonar() {
-  // Clear trigger
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-
-  // Send 10µs pulse
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-
-  // Read echo time
-  duration = pulseIn(echoPin, HIGH);
-
-  // Convert time to distance
-  distance_cm = duration * 0.0343 / 2;
-
-  return distance_cm;
 }
 
 void disable_motors() {
@@ -319,10 +330,48 @@ void stop()
 }
 
 void forward(float speed_forward) {
-  left_front_motor.writeMicroseconds(1500 + speed_forward);
-  left_rear_motor.writeMicroseconds(1500 + speed_forward);
-  right_rear_motor.writeMicroseconds(1500 - speed_forward);
-  right_front_motor.writeMicroseconds(1500 - speed_forward);
+  float desired_distance = 20;   // wall distance (cm)
+  float Kp = 2.5;                  // controller gain
+  float base_speed = 220;        // forward speed
+
+  float distance = read_sonar();   // distance to left wall
+  float error = desired_distance - distance;
+  float correction = Kp * error;
+
+  if(correction > 200) {
+    correction = 200;
+  }
+  if (correction < -200) {
+    correction = -200;
+  }
+
+  float left_speed = base_speed + correction;
+  float right_speed = base_speed - correction;
+  _delay_ms(200);   // small delay for sensor stability
+
+  left_front_motor.writeMicroseconds(1500 + speed_forward + left_speed);
+  left_rear_motor.writeMicroseconds(1500 + speed_forward + left_speed);
+  right_rear_motor.writeMicroseconds(1500 - speed_forward + right_speed);
+  right_front_motor.writeMicroseconds(1500 - speed_forward + right_speed);
+}
+
+int read_sonar() {
+  // Clear trigger
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  // Send 10µs pulse
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Read echo time
+  duration = pulseIn(echoPin, HIGH);
+
+  // Convert time to distance
+  distance_cm = duration * 0.0343 / 2;
+
+  return distance_cm;
 }
 
 void reverse(float speed_backward) {
