@@ -126,8 +126,8 @@ void drive(float left_speed, float right_speed) {
 void move_forward() {
 
   float desired_distance = 20;   // wall distance (cm)
-  float Kp = 5;                  // controller gain
-  float base_speed = 120;        // forward speed
+  float Kp = 2.5;                  // controller gain
+  float base_speed = 220;        // forward speed
 
   while (true) {
 
@@ -152,11 +152,11 @@ void move_forward() {
 
     float correction = Kp * error;
 
-    if(correction > 80) {
-      correction = 80;
+    if(correction > 200) {
+      correction = 200;
     }
-    if (correction < -80) {
-      correction = -80;
+    if (correction < -200) {
+      correction = -200;
     }
 
     float left_speed = base_speed + correction;
@@ -164,7 +164,7 @@ void move_forward() {
 
     drive(left_speed, right_speed);
 
-    delay(20);   // small delay for sensor stability
+    _delay_ms(10);   // small delay for sensor stability
   }
 }
 
@@ -205,13 +205,13 @@ void move_forward() {
     distance_long = 17948*pow(signalADClong,-1.22); // calculate the distance using the datasheet graph
     // For short range sensor
     distance_short = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
-
+    Serial.println(distance_long);
     while (distance_long >= 25) {
       signalADClong = analogRead(REAR_LONG_IR_SENSOR);
       distance_long = 17948*pow(signalADClong,-1.22);
       reverse(0.1 * signalADClong);
     }
-
+    // Serial.println(distance_short);
     while (distance_short >= 15) {
       signalADCshort = analogRead(REAR_SHORT_IR_SENSOR);
       distance_short = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
