@@ -26,7 +26,7 @@ float robot_width = 25;
 
 // For Homing
 float error, effort;
-float heading = 0;
+float heading = 344;
 float perpen = 140;  // Angle at wall
 
 // Serial Data input pin
