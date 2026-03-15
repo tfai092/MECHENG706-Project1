@@ -1,39 +1,47 @@
-// dt = 0;
-// Rw = ;
-// L = ;
-// l = ;
-// Use initial calc to have desired vx, and send voltage to motor accordingly
+float prev_distance = 0;
+float current_distance;
+float dt =0;
+float vx, distance_y, vy;
+float prev_y = 0;
+float theta1, theta2, theta3, theta4;
+float Rw = 0.025;
+float L = 0.15;
+float l = 0.09;
 
-// dt = millis()
-// Read IR Sensors
+void DriveStraight() {
+  while(1) {
+    dt = millis() - prev_dt;
+    // Read front sensors for driving forward
+    if (state == FORWARD) {
+      distance_y = read_sonar();
+      // For long range sensor
+      distance_long = 17948*pow(signalADClong,-1.22); // calculate the distance using the datasheet graph
+      // For short range sensor
+      distance_short = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
 
-// Find current distance
+      if (distance_long >= 25) {
+        current_distance = distance_long;
+        vx = (current_distance - prev_distance) / dtl;
+      }
 
-// Calculate change in distance
+      if (distance_short >= 15) {
+        current_distance = distance_short;
+        vx = (current_distance - prev_distance) / dtl;
+      }
+      vy = (distance_y - prev_y) / dt;
+      float gyroZ = sensorValue.un.gyroscope.z;
 
-// Calculate change in time
+      prev_distance = current_distance
+      prev_dt = dt
+      prev_y = distance_y;
 
-// Figure out current velocity in x
+      theta1 = 1 / Rw * (vx + vy - (L + l) * gyroZ);  // front left
+      theta2 = 1 / Rw * (vx - vy + (L + l) * gyroZ);  // front right
+      theta3 = 1 / Rw * (vx - vy - (L + l) * gyroZ);  // back left
+      theta4 = 1 / Rw * (vx + vy + (L + l) * gyroZ);  // back right ???????
 
-// Use sonar to find vy
+      }
 
-// Read gyro to find wz
+  }
 
-// Drive vy to zero by adjusting motors voltage
-
-// Perform control effort calcs using found values
-
-// Front left motor voltage
-front_left_effort = 1/Rw * (vx - vy - (L+l)*wz);
-// Front right motor voltage
-front_right_effort = 1/Rw * (vx + vy + (L+l)*wz);
-
-// Rear left motor voltage
-rear_left_effort = 1/Rw * (vx + vy - (L+l)*wz);
-// Rear right motor voltage
-rear_right_effort = 1/Rw * (vx - vy + (L+l)*wz);
-
-
-
-
-
+}
