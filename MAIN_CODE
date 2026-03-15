@@ -26,8 +26,8 @@ float robot_width = 25;
 
 // For Homing
 float error, effort;
-float heading = 344;
-float perpen = 140;  // Angle at wall
+float heading;
+float perpen = 344;  // Angle at wall
 
 // Serial Data input pin
 #define BLUETOOTH_RX 19
@@ -71,7 +71,7 @@ enum State {
     STOP
   };
 
-State state = FORWARD;
+State state = HOMING;
 State prevState = HOMING;
 
 void setup(void) {
@@ -253,10 +253,10 @@ void orientate() {
   error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
 
   while (abs(error) > 2) {
-    BluetoothSerial.println(heading);
+    BluetoothSerial.println(error);
     readOrientation();
     error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
-    effort = error * 5;  // Control effort
+    effort = error * 1.2;  // Control effort
 
     if (error > 0) {
       // Serial.println("CW ");
@@ -280,13 +280,13 @@ void readOrientation() {
       float qz = sensorValue.un.rotationVector.k;
 
       // Convert quaternion to yaw (heading)
-      float yaw = atan2(2.0*(qx*qy + qw*qz),
-                        qw*qw + qx*qx - qy*qy - qz*qz);
+      float yaw = atan2(2.0*(qx*qy + qw*qz), qw*qw + qx*qx - qy*qy - qz*qz);
 
-      float heading = yaw * 180.0 / PI;
+      heading = yaw * 180.0 / PI;
 
-      if (heading < 0)
+      if (heading < 0) {
         heading += 360;
+      }
 
       BluetoothSerial.print("Compass Heading: ");
       BluetoothSerial.print(heading);
