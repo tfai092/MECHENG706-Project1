@@ -1,0 +1,39 @@
+// dt = 0;
+// Rw = ;
+// L = ;
+// l = ;
+// Use initial calc to have desired vx, and send voltage to motor accordingly
+
+// dt = millis()
+// Read IR Sensors
+
+// Find current distance
+
+// Calculate change in distance
+
+// Calculate change in time
+
+// Figure out current velocity in x
+
+// Use sonar to find vy
+
+// Read gyro to find wz
+
+// Drive vy to zero by adjusting motors voltage
+
+// Perform control effort calcs using found values
+
+// Front left motor voltage
+front_left_effort = 1/Rw * (vx - vy - (L+l)*wz);
+// Front right motor voltage
+front_right_effort = 1/Rw * (vx + vy + (L+l)*wz);
+
+// Rear left motor voltage
+rear_left_effort = 1/Rw * (vx + vy - (L+l)*wz);
+// Rear right motor voltage
+rear_right_effort = 1/Rw * (vx - vy + (L+l)*wz);
+
+
+
+
+
