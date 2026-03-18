@@ -172,66 +172,78 @@ void loop() {
 
 
 void DriveStraight() {
-  float gyroZ;
 
   unsigned long now = millis();
 
-  // Run control loop at 50 Hz (20 ms)
+  // Run at 50 Hz
   if (now - prev_time >= 20) {
-    dt = (now - prev_time) / 1000.0;   // seconds
+
+    dt = (now - prev_time) / 1000.0;
     prev_time = now;
 
-    // --- SENSOR READINGS ---
+    float gyroZ = 0;
+
+    // --- SENSOR READ ---
     distance_y = read_sonar();
 
-    signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
-    signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
+    int signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
+    int signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
 
-    // Convert IR readings to distance
     distance_long  = 17948 * pow(signalADClong, -1.22);
     distance_short = 12.10 / (signalADCshort * (5.0 / 1024.0)) - 0.42;
 
     if (distance_long >= 25) {
       current_distance = distance_long;
-    } 
-    else if (distance_short >= 15) {
+    } else if (distance_short >= 15) {
       current_distance = distance_short;
     }
 
-    // --- VELOCITY CALCULATION ---
-    if (dt > 0.001) {
-      vx = (current_distance - prev_distance) / (100 * dt); // m/s
-      vy = (distance_y - prev_y) / (100 * dt);              // m/s
+    // --- FIRST RUN FIX (prevents spikes) ---
+    static bool first_run = true;
+    if (first_run) {
+      prev_distance = current_distance;
+      prev_y = distance_y;
+      first_run = false;
+      return;
     }
-
-    // Clamp to avoid spikes
-    vx = constrain(vx, -1.0, 1.0);
-    vy = constrain(vy, -1.0, 1.0);
 
     // --- GYRO ---
     if (bno08x.getSensorEvent(&sensorValue)) {
       gyroZ = sensorValue.un.gyroscope.z;
     }
 
-    prev_distance = current_distance;
-    prev_y = distance_y;
+    // ===============================
+    // 🚀 CONTROL LAW (THIS IS THE FIX)
+    // ===============================
 
-    // --- MECANUM KINEMATICS ---
-    theta1 = 1 / Rw * (vx - vy - (L + l) * gyroZ);  // front left
-    theta2 = 1 / Rw * (vx + vy + (L + l) * gyroZ);  // front right
-    theta3 = 1 / Rw * (vx + vy - (L + l) * gyroZ);  // back left
-    theta4 = 1 / Rw * (vx - vy + (L + l) * gyroZ);  // back right
+    float desired_distance = 20;   // cm from wall
+    float Kp_wall = 0.02;         // tune this
+    float Kp_heading = 0.5;       // gyro stabilisation
+
+    float vx = 0.2;  // constant forward speed (m/s)
+
+    // Wall following correction
+    float error = desired_distance - current_distance;
+    float vy = Kp_wall * error;
+
+    // Heading correction (keep straight)
+    float omega = -Kp_heading * gyroZ;
+
+    // Clamp for safety
+    vy = constrain(vy, -0.3, 0.3);
+    omega = constrain(omega, -1.0, 1.0);
+
+    // --- MECANUM ---
+    theta1 = (vx - vy - (L + l) * omega) / Rw;
+    theta2 = (vx + vy + (L + l) * omega) / Rw;
+    theta3 = (vx + vy - (L + l) * omega) / Rw;
+    theta4 = (vx - vy + (L + l) * omega) / Rw;
 
     // --- DEBUG ---
-    BluetoothSerial.print("vx = ");
-    BluetoothSerial.println(vx);
+    BluetoothSerial.print("Error: ");
+    BluetoothSerial.println(error);
 
-    BluetoothSerial.println(theta1);
-    BluetoothSerial.println(theta2);
-    BluetoothSerial.println(theta3);
-    BluetoothSerial.println(theta4);
-
-    // --- MOTOR OUTPUT ---
+    // --- MOTOR ---
     forward(theta1, theta2, theta3, theta4);
   }
 }
