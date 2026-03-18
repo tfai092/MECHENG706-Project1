@@ -172,78 +172,78 @@ void loop() {
 
 
 void DriveStraight() {
+  float gyroZ;
 
   unsigned long now = millis();
 
-  // Run at 50 Hz
+  // Run control loop at 50 Hz (20 ms)
   if (now - prev_time >= 20) {
-
-    dt = (now - prev_time) / 1000.0;
+    dt = (now - prev_time) / 1000.0;   // seconds
     prev_time = now;
 
-    float gyroZ = 0;
-
-    // --- SENSOR READ ---
+    // --- SENSOR READINGS ---
     distance_y = read_sonar();
 
-    int signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
-    int signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
+    signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
+    signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
 
+    // Convert IR readings to distance
     distance_long  = 17948 * pow(signalADClong, -1.22);
     distance_short = 12.10 / (signalADCshort * (5.0 / 1024.0)) - 0.42;
 
-    if (distance_long >= 25) {
+    /*if (distance_long >= 25) {
       current_distance = distance_long;
-    } else if (distance_short >= 15) {
+    } 
+    else if (distance_short >= 15) {
       current_distance = distance_short;
+    }*/
+    current_distance = distance_short;
+    if (prev_distance == 0) {
+      prev_distance = current_distance;
     }
 
-    // --- FIRST RUN FIX (prevents spikes) ---
-    static bool first_run = true;
-    if (first_run) {
-      prev_distance = current_distance;
-      prev_y = distance_y;
-      first_run = false;
-      return;
+    // --- VELOCITY CALCULATION ---
+    if (dt > 0.001) {
+      vx = (prev_distance - current_distance) / (100 * dt); // m/s
+      vy = (prev_y - distance_y ) / (100 * dt);              // m/s
     }
+
+    // Clamp to avoid spikes
+    vx = constrain(vx, -1.0, 1.0);
+    vy = constrain(vy, -1.0, 1.0);
 
     // --- GYRO ---
     if (bno08x.getSensorEvent(&sensorValue)) {
       gyroZ = sensorValue.un.gyroscope.z;
     }
 
-    // ===============================
-    // 🚀 CONTROL LAW (THIS IS THE FIX)
-    // ===============================
+    prev_distance = current_distance;
+    prev_y = distance_y;
 
-    float desired_distance = 20;   // cm from wall
-    float Kp_wall = 0.02;         // tune this
-    float Kp_heading = 0.5;       // gyro stabilisation
-
-    float vx = 0.2;  // constant forward speed (m/s)
-
-    // Wall following correction
-    float error = desired_distance - current_distance;
-    float vy = Kp_wall * error;
-
-    // Heading correction (keep straight)
-    float omega = -Kp_heading * gyroZ;
-
-    // Clamp for safety
-    vy = constrain(vy, -0.3, 0.3);
-    omega = constrain(omega, -1.0, 1.0);
-
-    // --- MECANUM ---
-    theta1 = (vx - vy - (L + l) * omega) / Rw;
-    theta2 = (vx + vy + (L + l) * omega) / Rw;
-    theta3 = (vx + vy - (L + l) * omega) / Rw;
-    theta4 = (vx - vy + (L + l) * omega) / Rw;
+    // --- MECANUM KINEMATICS ---
+    theta1 = 1 / Rw * (vx - vy - (L + l) * gyroZ);  // front left
+    theta2 = 1 / Rw * (vx + vy + (L + l) * gyroZ);  // front right
+    theta3 = 1 / Rw * (vx + vy - (L + l) * gyroZ);  // back left
+    theta4 = 1 / Rw * (vx - vy + (L + l) * gyroZ);  // back right
 
     // --- DEBUG ---
-    BluetoothSerial.print("Error: ");
-    BluetoothSerial.println(error);
+    // BluetoothSerial.print("vx = ");
+    // BluetoothSerial.println(vx);
+    
+    // BluetoothSerial.println(distance_y);
+    // BluetoothSerial.print("vy = ");
+    // BluetoothSerial.println(vy);
+    // BluetoothSerial.println(gyroZ);
+    BluetoothSerial.print("1 = ");
+    BluetoothSerial.println(theta1);
+    BluetoothSerial.print("2 = ");
+    BluetoothSerial.println(theta2);
+    BluetoothSerial.print("3 = ");
+    BluetoothSerial.println(theta3);
+    BluetoothSerial.print("4 = ");
+    BluetoothSerial.println(theta4);
 
-    // --- MOTOR ---
+    // --- MOTOR OUTPUT ---
     forward(theta1, theta2, theta3, theta4);
   }
 }
@@ -455,12 +455,12 @@ int read_sonar() {
   return distance_cm;
 }
 
-#define kppp 1
+#define kppp 6
 void forward(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 + kppp*a);
-  left_rear_motor.writeMicroseconds(1500 + kppp*c);
-  right_rear_motor.writeMicroseconds(1500 + kppp*d);
-  right_front_motor.writeMicroseconds(1500 + kppp*b);
+  left_front_motor.writeMicroseconds(1750 + kppp*a);
+  left_rear_motor.writeMicroseconds(1750 + kppp*c);
+  right_rear_motor.writeMicroseconds(1250 - kppp*d);
+  right_front_motor.writeMicroseconds(1250 - kppp*b);
 }
 
 void reverse(float speed_backward) {
