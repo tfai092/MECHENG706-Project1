@@ -63,6 +63,17 @@ float distance_long;
 float distance_reading = 0;
 int pos = 0;
 
+float prev_distance = 0;
+float current_distance;
+float dt =0;
+unsigned long prev_time = 0;
+float vx, distance_y, vy;
+float prev_y = 0;
+float theta1, theta2, theta3, theta4;
+float Rw = 0.025;
+float L = 0.15;
+float l = 0.09;
+
 enum State {
     HOMING,
     FORWARD,
@@ -71,7 +82,7 @@ enum State {
     STOP
   };
 
-State state = HOMING;
+State state = FORWARD; // CHANGED THISSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
 State prevState = HOMING;
 
 void setup(void) {
@@ -118,9 +129,9 @@ void loop() {
       break;
 
     case FORWARD:
-      move_forward();
-      state = RIGHT;
-      prevState = FORWARD;
+      DriveStraight(); // TESTING CHANGE THISSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+      //state = RIGHT;
+      //prevState = FORWARD;
       break;
 
     case RIGHT:
@@ -159,7 +170,79 @@ void loop() {
     _delay_ms(500);
   }
 
-  void move_forward() {
+
+void DriveStraight() {
+  float gyroZ;
+
+  unsigned long now = millis();
+
+  // Run control loop at 50 Hz (20 ms)
+  if (now - prev_time >= 20) {
+    dt = (now - prev_time) / 1000.0;   // seconds
+    prev_time = now;
+
+    // --- SENSOR READINGS ---
+    distance_y = read_sonar();
+
+    signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
+    signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
+
+    // Convert IR readings to distance
+    distance_long  = 17948 * pow(signalADClong, -1.22);
+    distance_short = 12.10 / (signalADCshort * (5.0 / 1024.0)) - 0.42;
+
+    /*if (distance_long >= 25) {
+      current_distance = distance_long;
+    } 
+    else if (distance_short >= 15) {
+      current_distance = distance_short;
+    }*/
+    current_distance = distance_short;
+    if (prev_distance == 0) {
+      prev_distance = current_distance;
+    }
+
+    // --- VELOCITY CALCULATION ---
+    if (dt > 0.001) {
+      vx = (current_distance - prev_distance) / (100 * dt); // m/s
+      vy = (distance_y - prev_y) / (100 * dt);              // m/s
+    }
+
+    // Clamp to avoid spikes
+    // vx = constrain(vx, -1.0, 1.0);
+    // vy = constrain(vy, -1.0, 1.0);
+
+    // --- GYRO ---
+    if (bno08x.getSensorEvent(&sensorValue)) {
+      gyroZ = sensorValue.un.gyroscope.z;
+    }
+
+    prev_distance = current_distance;
+    prev_y = distance_y;
+
+    // --- MECANUM KINEMATICS ---
+    theta1 = 1 / Rw * (vx - vy - (L + l) * gyroZ);  // front left
+    theta2 = 1 / Rw * (vx + vy + (L + l) * gyroZ);  // front right
+    theta3 = 1 / Rw * (vx + vy - (L + l) * gyroZ);  // back left
+    theta4 = 1 / Rw * (vx - vy + (L + l) * gyroZ);  // back right
+
+    // --- DEBUG ---
+    // BluetoothSerial.print("vx = ");
+    // BluetoothSerial.println(vx);
+    
+    // BluetoothSerial.println(distance_y);
+    BluetoothSerial.print("vy = ");
+    BluetoothSerial.println(vy);
+    // BluetoothSerial.println(gyroZ);
+    // BluetoothSerial.println(theta2);
+    // BluetoothSerial.println(theta3);
+    // BluetoothSerial.println(theta4);
+
+    // --- MOTOR OUTPUT ---
+    forward(theta1, theta2, theta3, theta4);
+  }
+}
+  /* void move_forward() {
     BluetoothSerial.println("moving forward");
     float speed = 0;
 
@@ -174,17 +257,17 @@ void loop() {
     while (distance_long >= 25) {
       signalADClong = analogRead(FRONT_LONG_IR_SENSOR);
       distance_long = 17948*pow(signalADClong,-1.22);
-      forward_base(4 * (distance_long - 15));
+      forward(5 * (distance_long - 15));
     }
 
     while (distance_short >= 15) {
       signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
       distance_short = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
-      forward_base(10 * (distance_short - 15));
+      forward(10 * (distance_short - 15));
     }
     stop();
   } 
-
+*/
   void move_right() {
     BluetoothSerial.println("Going Right");
     float starting_distance = 0;
@@ -205,7 +288,7 @@ void loop() {
     starting_distance = distance_cm;
 
     while (distance_cm < (starting_distance + robot_width)) {
-      strafe_right(20 * ((starting_distance + robot_width) - distance_cm));
+      strafe_right(12 * ((starting_distance + robot_width) - distance_cm));
       distance_cm = read_sonar();
     }
     stop();
@@ -215,14 +298,9 @@ void loop() {
     BluetoothSerial.println("Going Left");
     float starting_distance = 0;
     starting_distance = read_sonar();
-    float effort_sonar;
 
     while (distance_cm > 15) {
-      effort_sonar = 10 * distance_cm;
-      if (effort_sonar > 50) {
-        effort_sonar = 50;
-      }
-      strafe_left(effort_sonar);
+      strafe_left(4 * distance_cm);
       distance_cm = read_sonar();
     }
     stop();
@@ -242,13 +320,13 @@ void loop() {
     while (distance_long >= 10) {
       signalADClong = analogRead(REAR_LONG_IR_SENSOR);
       distance_long = 17948*pow(signalADClong,-1.22);
-      reverse(4 * (distance_long - 15));
+      reverse(5 * signalADClong);
     }
 
     while (distance_short >= 15) {
       signalADCshort = analogRead(REAR_SHORT_IR_SENSOR);
       distance_short = 12.10/(signalADCshort*(5.0/1024.0)) - 0.42;
-      reverse(9 * (distance_short - 15));
+      reverse(10 * signalADCshort);
     }
     stop();
   }
@@ -261,14 +339,7 @@ void orientate() {
     BluetoothSerial.println(error);
     readOrientation();
     error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
-    effort = error * 0.9;  // Control effort
-
-    if(effort > 120) {
-      effort = 120;
-    } 
-    if (effort < -120) {
-      effort = -120;
-    }
+    effort = error * 1.2;  // Control effort
 
     if (error > 0) {
       // Serial.println("CW ");
@@ -334,31 +405,31 @@ void stop()
   right_front_motor.writeMicroseconds(1500);
 }
 
-void forward(float speed_forward) {
-  float desired_distance = 20;   // wall distance (cm)
-  float Kp = 0.2;                  // controller gain
-  float base_speed = 50;        // forward speed
+// void forward(float speed_forward) {
+//   float desired_distance = 20;   // wall distance (cm)
+//   float Kp = 0.2;                  // controller gain
+//   float base_speed = 50;        // forward speed
 
-  float distance = read_sonar();   // distance to left wall
-  float error = desired_distance - distance;
-  float correction = Kp * error;
+//   float distance = read_sonar();   // distance to left wall
+//   float error = desired_distance - distance;
+//   float correction = Kp * error;
 
-  if(correction > 80) {
-    correction = 80;
-  }
-  if (correction < -80) {
-    correction = -80;
-  }
+//   if(correction > 80) {
+//     correction = 80;
+//   }
+//   if (correction < -80) {
+//     correction = -80;
+//   }
 
-  float left_speed = base_speed + correction;
-  float right_speed = base_speed - correction;
-  _delay_ms(200);   // small delay for sensor stability
+//   float left_speed = base_speed + correction;
+//   float right_speed = base_speed - correction;
+//   _delay_ms(200);   // small delay for sensor stability
 
-  left_front_motor.writeMicroseconds(1500 + speed_forward + left_speed);
-  left_rear_motor.writeMicroseconds(1500 + speed_forward + left_speed);
-  right_rear_motor.writeMicroseconds(1500 - speed_forward + right_speed);
-  right_front_motor.writeMicroseconds(1500 - speed_forward + right_speed);
-}
+//   left_front_motor.writeMicroseconds(1500 + speed_forward + left_speed);
+//   left_rear_motor.writeMicroseconds(1500 + speed_forward + left_speed);
+//   right_rear_motor.writeMicroseconds(1500 - speed_forward + right_speed);
+//   right_front_motor.writeMicroseconds(1500 - speed_forward + right_speed);
+// }
 
 int read_sonar() {
   // Clear trigger
@@ -379,11 +450,12 @@ int read_sonar() {
   return distance_cm;
 }
 
-void forward_base(float speed_val) {
-  left_front_motor.writeMicroseconds(1500 + speed_val);
-  left_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_front_motor.writeMicroseconds(1500 - speed_val);
+#define kppp 4
+void forward(float a, float b, float c, float d) {
+  left_front_motor.writeMicroseconds(1500 + kppp*a);
+  left_rear_motor.writeMicroseconds(1500 + kppp*c);
+  right_rear_motor.writeMicroseconds(1500 + kppp*d);
+  right_front_motor.writeMicroseconds(1500 + kppp*b);
 }
 
 void reverse(float speed_backward) {
