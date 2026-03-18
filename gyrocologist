@@ -1,388 +1,58 @@
-/*
-  MechEng 706 Base Code
+void DriveStraightCompass() {
 
-  This code provides basic movement and sensor reading for the MechEng 706 Mecanum Wheel Robot Project
+  unsigned long now = millis();
 
-  Hardware:
-    Arduino Mega2560 https://www.arduino.cc/en/Guide/ArduinoMega2560
-    BNO085 https://www.adafruit.com/product/4754
-    Ultrasonic Sensor - HC-SR04 https://www.sparkfun.com/products/13959
-    Infrared Proximity Sensor - Sharp https://www.sparkfun.com/products/242
-    Infrared Proximity Sensor Short Range - Sharp https://www.sparkfun.com/products/12728
-    Servo - Generic (Sub-Micro Size) https://www.sparkfun.com/products/9065
-    Vex Motor Controller 29 https://www.vexrobotics.com/276-2193.html
-    Vex Motors https://www.vexrobotics.com/motors.html
-    Turnigy nano-tech 2200mah 2S https://hobbyking.com/en_us/turnigy-nano-tech-2200mah-2s-25-50c-lipo-pack.html
-    HC 12 Module https://www.hc01.com/downloads/HC-12%20english%20datasheets.pdf
+  if (now - prev_time >= 20) {   // 50 Hz loop
+    float dt = (now - prev_time) / 1000.0;
+    prev_time = now;
 
-  Date: 11/11/2016
-  Author: Logan Stuart
-  Modified: 18/02/2026
-  Author: Trishit Ghatak
-*/
+    // --- READ HEADING ---
+    readOrientation();  // updates global "heading"
 
+    float target_heading = 344;
 
-/*
-        DONT CHANGE HEADERS
-   
------------------------------
-*/
+    // --- ERROR ---
+    float error = target_heading - heading;
 
-#include <Servo.h>  //Need for Servo pulse output
+    // Wrap angle [-180, 180]
+    if (error > 180) error -= 360;
+    if (error < -180) error += 360;
 
-#include <Adafruit_BNO08x.h>  //Need for Gyroscope
+    // --- P CONTROL ---
+    float Kp = 0.02;
+    float omega = Kp * error;
 
-//Gyroscope initialisation
-Adafruit_BNO08x bno08x(-1);
-sh2_SensorValue_t sensorValue;
-float rad = 0.0;
+    // Clamp rotation
+    omega = constrain(omega, -0.5, 0.5);
 
-#define kp 0.1
+    // --- FORWARD SPEED ---
+    float vx = 0.6;   // constant forward motion
+    float vy = 0.0;   // no strafing
 
-float current_theta = A0;  // Change for current input pin
+    // --- MECANUM IK ---
+    float theta1 = (vx - vy - (L + l) * omega) / Rw;
+    float theta2 = (vx + vy + (L + l) * omega) / Rw;
+    float theta3 = (vx + vy - (L + l) * omega) / Rw;
+    float theta4 = (vx - vy + (L + l) * omega) / Rw;
 
-float theta = 0;
-float error, effort, heading;
-unsigned long prev_time;
+    // --- NORMALIZE ---
+    float maxVal = max(max(abs(theta1), abs(theta2)),
+                       max(abs(theta3), abs(theta4)));
 
-float perpen = 334;  // Angle at wall
-
-
-// #define NO_READ_GYRO  //Uncomment if GYRO is not attached.
-
-#define NO_HC -SR04  //Uncomment if HC-SR04 ultrasonic ranging sensor is not attached.
-
-//#define NO_BATTERY_V_OK //Uncomment if BATTERY_V_OK if you do not care about battery damage.
-
-//State machine states
-enum STATE {
-  INITIALISING,
-  RUNNING,
-  STOPPED
-};
-
-//Refer to Shield Pinouts.jpg for pin locations
-
-//Default motor control pins
-const byte left_front = 46;
-const byte left_rear = 47;
-const byte right_rear = 50;
-const byte right_front = 51;
-
-
-//Default ultrasonic ranging sensor pins, these pins are defined my the Shield
-const int TRIG_PIN = 48;
-const int ECHO_PIN = 49;
-
-// Anything over 400 cm (23200 us pulse) is "out of range". Hit:If you decrease to this the ranging sensor but the timeout is short, you may not need to read up to 4meters.
-const unsigned int MAX_DIST = 23200;
-
-Servo left_font_motor;   // create servo object to control Vex Motor Controller 29
-Servo left_rear_motor;   // create servo object to control Vex Motor Controller 29
-Servo right_rear_motor;  // create servo object to control Vex Motor Controller 29
-Servo right_font_motor;  // create servo object to control Vex Motor Controller 29
-Servo turret_motor;
-
-
-int speed_val = 100;
-int speed_change;
-
-//Serial Pointer
-HardwareSerial *SerialCom;
-
-int pos = 0;
-void setup(void) {
-  turret_motor.attach(11);
-  pinMode(LED_BUILTIN, OUTPUT);
-
-  // The Trigger pin will tell the sensor to range find
-  pinMode(TRIG_PIN, OUTPUT);
-  digitalWrite(TRIG_PIN, LOW);
-
-  // Setup the Serial port and pointer, the pointer allows switching the debug info through the USB port(Serial) or Bluetooth port(Serial1) with ease.
-  SerialCom = &Serial;
-  SerialCom->begin(115200);
-  SerialCom->println("MECHENG706_Base_Code");
-  delay(1000);
-  SerialCom->println("Setup....");
-
-  delay(1000);  //settling time but no really needed
-}
-
-
-
-void fast_flash_double_LED_builtin() {
-  static byte indexer = 0;
-  static unsigned long fast_flash_millis;
-  if (millis() > fast_flash_millis) {
-    indexer++;
-    if (indexer > 4) {
-      fast_flash_millis = millis() + 700;
-      digitalWrite(LED_BUILTIN, LOW);
-      indexer = 0;
-    } else {
-      fast_flash_millis = millis() + 100;
-      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-    }
-  }
-}
-
-void slow_flash_LED_builtin() {
-  static unsigned long slow_flash_millis;
-  if (millis() - slow_flash_millis > 2000) {
-    slow_flash_millis = millis();
-    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-  }
-}
-
-void speed_change_smooth() {
-  speed_val += speed_change;
-  if (speed_val > 1000)
-    speed_val = 1000;
-  speed_change = 0;
-}
-
-#ifndef NO_BATTERY_V_OK
-boolean is_battery_voltage_OK() {
-  static byte Low_voltage_counter;
-  static unsigned long previous_millis;
-
-  int Lipo_level_cal;
-  int raw_lipo;
-  //the voltage of a LiPo cell depends on its chemistry and varies from about 3.5V (discharged) = 717(3.5V Min) https://oscarliang.com/lipo-battery-guide/
-  //to about 4.20-4.25V (fully charged) = 860(4.2V Max)
-  //Lipo Cell voltage should never go below 3V, So 3.5V is a safety factor.
-  raw_lipo = analogRead(A0);
-  Lipo_level_cal = (raw_lipo - 717);
-  Lipo_level_cal = Lipo_level_cal * 100;
-  Lipo_level_cal = Lipo_level_cal / 143;
-
-  if (Lipo_level_cal > 0 && Lipo_level_cal < 160) {
-    previous_millis = millis();
-    SerialCom->print("Lipo level:");
-    SerialCom->print(Lipo_level_cal);
-    SerialCom->print("%");
-    // SerialCom->print(" : Raw Lipo:");
-    // SerialCom->println(raw_lipo);
-    SerialCom->println("");
-    Low_voltage_counter = 0;
-    return true;
-  } else {
-    if (Lipo_level_cal < 0)
-      SerialCom->println("Lipo is Disconnected or Power Switch is turned OFF!!!");
-    else if (Lipo_level_cal > 160)
-      SerialCom->println("!Lipo is Overchanged!!!");
-    else {
-      SerialCom->println("Lipo voltage too LOW, any lower and the lipo with be damaged");
-      SerialCom->print("Please Re-charge Lipo:");
-      SerialCom->print(Lipo_level_cal);
-      SerialCom->println("%");
+    if (maxVal > 1.0) {
+      theta1 /= maxVal;
+      theta2 /= maxVal;
+      theta3 /= maxVal;
+      theta4 /= maxVal;
     }
 
-    Low_voltage_counter++;
-    if (Low_voltage_counter > 5)
-      return false;
-    else
-      return true;
+    // --- DRIVE ---
+    forward(theta1, theta2, theta3, theta4);
+
+    // --- DEBUG ---
+    BluetoothSerial.print("Heading: ");
+    BluetoothSerial.print(heading);
+    BluetoothSerial.print(" Error: ");
+    BluetoothSerial.println(error);
   }
-}
-#endif
-
-#ifndef NO_HC - SR04
-void HC_SR04_range() {
-  unsigned long t1;
-  unsigned long t2;
-  unsigned long pulse_width;
-  float cm;
-  float inches;
-
-  // Hold the trigger pin high for at least 10 us
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  // Wait for pulse on echo pin
-  t1 = micros();
-  while (digitalRead(ECHO_PIN) == 0) {
-    t2 = micros();
-    pulse_width = t2 - t1;
-    if (pulse_width > (MAX_DIST + 1000)) {
-      SerialCom->println("HC-SR04: NOT found");
-      return;
-    }
-  }
-
-  // Measure how long the echo pin was held high (pulse width)
-  // Note: the micros() counter will overflow after ~70 min
-
-  t1 = micros();
-  while (digitalRead(ECHO_PIN) == 1) {
-    t2 = micros();
-    pulse_width = t2 - t1;
-    if (pulse_width > (MAX_DIST + 1000)) {
-      SerialCom->println("HC-SR04: Out of range");
-      return;
-    }
-  }
-
-  t2 = micros();
-  pulse_width = t2 - t1;
-
-  // Calculate distance in centimeters and inches. The constants
-  // are found in the datasheet, and calculated from the assumed speed
-  //of sound in air at sea level (~340 m/s).
-  cm = pulse_width / 58.0;
-  inches = pulse_width / 148.0;
-
-  // Print out results
-  if (pulse_width > MAX_DIST) {
-    SerialCom->println("HC-SR04: Out of range");
-  } else {
-    SerialCom->print("HC-SR04:");
-    SerialCom->print(cm);
-    SerialCom->println("cm");
-  }
-}
-#endif
-
-void Analog_Range_A4() {
-  SerialCom->print("Analog Range A4:");
-  SerialCom->println(analogRead(A4));
-}
-
-#ifndef NO_READ_GYRO
-void GYRO_reading() {
-  if (bno08x.wasReset()) {
-    bno08x.enableReport(SH2_GYROSCOPE_UNCALIBRATED);
-  }
-
-  if (bno08x.getSensorEvent(&sensorValue)) {
-    if (sensorValue.sensorId == SH2_GYROSCOPE_UNCALIBRATED) {
-      float gyroZ = sensorValue.un.gyroscope.z; // Current Measured Angular Velocity Around The Z Axis
-      SerialCom->print("Gyroscope I2C: ");
-      SerialCom->println(gyroZ);
-    }
-  }
-  return;
-}
-#endif
-
-void loop() {
-
-  if (bno08x.getSensorEvent(&sensorValue)) {
-
-    if (sensorValue.sensorId == SH2_ROTATION_VECTOR) {
-
-      float qw = sensorValue.un.rotationVector.real;
-      float qx = sensorValue.un.rotationVector.i;
-      float qy = sensorValue.un.rotationVector.j;
-      float qz = sensorValue.un.rotationVector.k;
-
-      // Convert quaternion to yaw (heading)
-      float yaw = atan2(2.0*(qx*qy + qw*qz),
-                        qw*qw + qx*qx - qy*qy - qz*qz);
-
-      float heading = yaw * 180.0 / PI;
-
-      if (heading < 0)
-        heading += 360;
-
-      Serial.print("Compass Heading: ");
-      Serial.print(heading);
-      Serial.println(" degrees");
-
-      rotateToZero();
-    }
-  }
-}
-
-
-void rotateToZero() {
-    
-    error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
-    effort = error * kp;  // Control effort
-
-    if (error > 0) {
-        cw();
-    }
-    else {
-        ccw();
-    }
-
-    if (abs(error) < 0.2) {
-        stop();
-    }
-        
-
-}
-
-//----------------------Motor moments------------------------
-//The Vex Motor Controller 29 use Servo Control signals to determine speed and direction, with 0 degrees meaning neutral https://en.wikipedia.org/wiki/Servo_control
-
-void disable_motors() {
-  left_font_motor.detach();   // detach the servo on pin left_front to turn Vex Motor Controller 29 Off
-  left_rear_motor.detach();   // detach the servo on pin left_rear to turn Vex Motor Controller 29 Off
-  right_rear_motor.detach();  // detach the servo on pin right_rear to turn Vex Motor Controller 29 Off
-  right_font_motor.detach();  // detach the servo on pin right_front to turn Vex Motor Controller 29 Off
-
-  pinMode(left_front, INPUT);
-  pinMode(left_rear, INPUT);
-  pinMode(right_rear, INPUT);
-  pinMode(right_front, INPUT);
-}
-
-void enable_motors() {
-  left_font_motor.attach(left_front);    // attaches the servo on pin left_front to turn Vex Motor Controller 29 On
-  left_rear_motor.attach(left_rear);     // attaches the servo on pin left_rear to turn Vex Motor Controller 29 On
-  right_rear_motor.attach(right_rear);   // attaches the servo on pin right_rear to turn Vex Motor Controller 29 On
-  right_font_motor.attach(right_front);  // attaches the servo on pin right_front to turn Vex Motor Controller 29 On
-}
-void stop()  //Stop
-{
-  left_font_motor.writeMicroseconds(1500);
-  left_rear_motor.writeMicroseconds(1500);
-  right_rear_motor.writeMicroseconds(1500);
-  right_font_motor.writeMicroseconds(1500);
-}
-
-void forward() {
-  left_font_motor.writeMicroseconds(1500 + speed_val);
-  left_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_font_motor.writeMicroseconds(1500 - speed_val);
-}
-
-void reverse() {
-  left_font_motor.writeMicroseconds(1500 - speed_val);
-  left_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_font_motor.writeMicroseconds(1500 + speed_val);
-}
-
-void ccw() {
-  left_font_motor.writeMicroseconds((1500 - speed_val) * effort);
-  left_rear_motor.writeMicroseconds((1500 - speed_val) * effort);
-  right_rear_motor.writeMicroseconds((1500 - speed_val) * effort);
-  right_font_motor.writeMicroseconds((1500 - speed_val) * effort);
-}
-
-void cw() {
-  left_font_motor.writeMicroseconds((1500 + speed_val) * effort);
-  left_rear_motor.writeMicroseconds((1500 + speed_val) * effort);
-  right_rear_motor.writeMicroseconds((1500 + speed_val) * effort);
-  right_font_motor.writeMicroseconds((1500 + speed_val) * effort);
-}
-
-void strafe_left() {
-  left_font_motor.writeMicroseconds(1500 - speed_val);
-  left_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_font_motor.writeMicroseconds(1500 - speed_val);
-}
-
-void strafe_right() {
-  left_font_motor.writeMicroseconds(1500 + speed_val);
-  left_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_font_motor.writeMicroseconds(1500 + speed_val);
 }
