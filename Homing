@@ -276,7 +276,7 @@ void orientate() {
     BluetoothSerial.println(w_error);
     readOrientation();
     w_error = perpen - heading; // Desired angle(perpendicular to wall) - current compass angle
-    effort = w_error * 1.2;  // Control effort
+    effort = w_error * 0.8;  // Control effort
 
     if (w_error > 0) {
       // Serial.println("CW ");
