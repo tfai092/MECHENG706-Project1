@@ -274,16 +274,17 @@ void orientate() {
   float w_error = perpen - heading;
   float integral = 0;
 
-  const float Kp = 0.8;
-  const float Ki = 0.02;
+  const float Kp = 5;
+  const float Ki = 0.25;
 
-  const float TOLERANCE = 2;
+  const float TOLERANCE = 2;          // Degrees
+  const int STABLE_CYCLES = 5;        // Must stay within tolerance for 5 loops
+  int stable_count = 0;
 
   unsigned long lastTime = millis();
 
   while (true) {
-
-    //  Compute dt (in seconds)
+    // Compute dt (in seconds)
     unsigned long currentTime = millis();
     float dt = (currentTime - lastTime) / 1000.0;
     lastTime = currentTime;
@@ -291,35 +292,39 @@ void orientate() {
     readOrientation();
     w_error = perpen - heading;
 
-    //  Time-based integral
+    // Time-based integral
     integral += w_error * dt;
 
-    //  Anti-windup
+    // Anti-windup
     if (integral > 100) integral = 100;
     if (integral < -100) integral = -100;
 
-    //  PI control
+    // PI control
     float effort = Kp * w_error + Ki * integral;
 
-    //  Clamp effort
-    if (effort > 150) effort = 150;
-    if (effort < -150) effort = -150;
+    // Clamp effort to motor limits
+    if (effort > 200) effort = 200;
+    if (effort < -200) effort = -200;
 
-    //BluetoothSerial.println(w_error);
-
+    // Send effort to motors
     if (effort > 0) {
       cw(effort);
     } else {
-      ccw(-effort);
+      ccw((-1)*effort);
     }
 
-    //  Stop condition
+    // Stable stop condition
     if (abs(w_error) < TOLERANCE) {
+      stable_count++;
+    } else {
+      stable_count = 0;
+    }
+
+    if (stable_count >= STABLE_CYCLES) {
       stop();
       break;
     }
   }
-  stop();
 }
 
 void readOrientation() {
