@@ -259,6 +259,10 @@ void move_left() {
             break;
         }
 
+        if (speed > 200) {
+          speed = 200;
+        }
+
         reverse(speed);
     }
     stop();
