@@ -10,10 +10,10 @@ Adafruit_BNO08x bno08x(-1);
 sh2_SensorValue_t sensorValue;
 
 //Default motor control pins
-const byte left_front = 46;
-const byte left_rear = 47;
+const byte left_front = 51;
+const byte left_rear = 46;
 const byte right_rear = 50;
-const byte right_front = 51;
+const byte right_front = 47;
 
 // For Ultrasonic sensor
 const int trigPin = 48;
@@ -48,10 +48,10 @@ int speed_change;
 //Serial Pointer
 HardwareSerial *SerialCom;
 
-int FRONT_SHORT_IR_SENSOR = A14; //sensor is attached on pinA14
-int FRONT_LONG_IR_SENSOR = A13; //sensor is attached on pinA13
-int REAR_SHORT_IR_SENSOR = A15; //sensor is attached on pinA15
-int REAR_LONG_IR_SENSOR = A12; //sensor is attached on pinA12
+int FRONT_SHORT_IR_SENSOR = A15; //sensor is attached on pinA14
+int FRONT_LONG_IR_SENSOR = A12; //sensor is attached on pinA13
+int REAR_SHORT_IR_SENSOR = A14; //sensor is attached on pinA15
+int REAR_LONG_IR_SENSOR = A13; //sensor is attached on pinA12
 
 byte serialRead = 0; //for control serial communication
 int signalADCshort = 0; // the read out signal in 0-1023 corresponding to 0-5v
@@ -84,7 +84,7 @@ enum State {
   };
 
 State state = FORWARD; // CHANGED THISSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
-State prevState = HOMING;
+State prevState = FORWARD;
 
 void setup(void) {
 
@@ -130,23 +130,22 @@ void loop() {
       break;
 
     case FORWARD:
-      BluetoothSerial.println("FORWARD");
-      _delay_ms(100);
-      InverseKinematics(); 
-      state = RIGHT;
-      prevState = FORWARD;
-      break;
+    strafe_left(300);
+      //InverseKinematics(); 
+      //_delay_ms(1000);
+      //state = RIGHT;
+      //prevState = FORWARD;
+    break;
 
     case RIGHT:
-      distance_from_wall += 20;
-      BluetoothSerial.println("RIGHT");
+      //distance_from_wall += 20;
       InverseKinematics();
-      if (prevState == FORWARD) {
+      /*if (prevState == FORWARD) {
         state = BACKWARD;
       } else {
         state = FORWARD;
       }
-      prevState = RIGHT;
+      prevState = RIGHT;*/
       break;
 
     case BACKWARD:
@@ -177,7 +176,7 @@ void loop() {
 
 void InverseKinematics() {
   
-  float target_heading = 300;
+  float target_heading = 240;
   float w_error, x_error, y_error, overall_error;
 
   distance_y = read_sonar();
@@ -197,18 +196,21 @@ void InverseKinematics() {
   }
 
   x_error = current_distance;
-  y_error = distance_from_wall - distance_y;
+  y_error = distance_y - distance_from_wall;
 
   if (state == FORWARD) {
+    BluetoothSerial.println("FORWARD");
     overall_error = x_error;
   } else if (state == RIGHT) {
+    BluetoothSerial.println("RIGHT");
     overall_error = y_error;
   } else if (state == BACKWARD) {
+    BluetoothSerial.println("BACK");
     overall_error = x_error;
   }
 
-  while (abs(overall_error) > 5) {
-    BluetoothSerial.println(overall_error);
+  while (abs(overall_error) > 15) {
+    //BluetoothSerial.println(overall_error);
     unsigned long now = millis();
     if (now - prev_time >= 100) {   // 50 Hz loop
       prev_time = now;
@@ -230,7 +232,7 @@ void InverseKinematics() {
       }
 
       x_error = current_distance;
-      y_error = distance_from_wall - distance_y;
+      y_error = distance_y - distance_from_wall;
       w_error = target_heading - heading;
 
       // Wrap angle
@@ -238,8 +240,8 @@ void InverseKinematics() {
       if (w_error < -180) w_error += 360;
 
       float kp_x = 0.1;
-      float kp_y = 0.2;
-      float Kp = 1;
+      float kp_y = 5;
+      float Kp = 0.5;
 
       float omega  = Kp * w_error;
     
@@ -256,8 +258,8 @@ void InverseKinematics() {
 
       theta1 = (1.0 / Rw) * (vx - vy - (L + l) * omega);  // front left
       theta2 = (1.0 / Rw) * (vx + vy + (L + l) * omega);  // front right
-      theta3 = (1.0 / Rw) * (vx + vy - (L + l) * omega);  // back left
-      theta4 = (1.0 / Rw) * (vx - vy + (L + l) * omega);  // back right 
+      theta3 = (1.0 / Rw) * (vx - vy + (L + l) * omega);  // back left
+      theta4 = (1.0 / Rw) * (vx + vy - (L + l) * omega);  // back right 
 
       if (state == FORWARD) {
         forward(theta1, theta2, theta3, theta4);
@@ -271,6 +273,7 @@ void InverseKinematics() {
       }
     }
 }
+BluetoothSerial.println("DONE LOOP");
 }
 
 
@@ -396,16 +399,16 @@ int read_sonar() {
 #define kppp 1
 void forward(float a, float b, float c, float d) {
   left_front_motor.writeMicroseconds(1500 + kppp*a);
-  left_rear_motor.writeMicroseconds(1500 + kppp*c);
-  right_rear_motor.writeMicroseconds(1500 - kppp*d);
-  right_front_motor.writeMicroseconds(1500 - kppp*b);
+  left_rear_motor.writeMicroseconds(1500 + kppp*d);
+  right_rear_motor.writeMicroseconds(1500 + kppp*c);
+  right_front_motor.writeMicroseconds(1500 + kppp*b);
 }
 
 void reverse(float a, float b, float c, float d) {
   left_front_motor.writeMicroseconds(1500 - kppp*a);
-  left_rear_motor.writeMicroseconds(1500 - kppp*b);
-  right_rear_motor.writeMicroseconds(1500 + kppp*c);
-  right_front_motor.writeMicroseconds(1500 + kppp*d);
+  left_rear_motor.writeMicroseconds(1500 - kppp*d);
+  right_rear_motor.writeMicroseconds(1500 - kppp*c);
+  right_front_motor.writeMicroseconds(1500 - kppp*b);
 }
 
 void ccw(float speed_ccw) {
@@ -423,15 +426,15 @@ void cw(float speed_cw) {
 }
 
 void strafe_left(float speed_left) {
-  left_front_motor.writeMicroseconds(1500 - speed_left);
-  left_rear_motor.writeMicroseconds(1500 + speed_left);
-  right_rear_motor.writeMicroseconds(1500 - speed_left);
+  //left_front_motor.writeMicroseconds(1500 + speed_left);
+  //left_rear_motor.writeMicroseconds(1500 + speed_left);
+  //right_rear_motor.writeMicroseconds(1500 - speed_left);
   right_front_motor.writeMicroseconds(1500 + speed_left);
 }
 
 void strafe_right(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 - kppp*a);
-  left_rear_motor.writeMicroseconds(1500 + kppp*c);
-  right_rear_motor.writeMicroseconds(1500 + kppp*d);
-  right_front_motor.writeMicroseconds(1500 - kppp*b);
+  left_front_motor.writeMicroseconds(1500 - kppp*a);   // forward
+  left_rear_motor.writeMicroseconds(1500 + kppp*d);    // backward
+  right_rear_motor.writeMicroseconds(1500 - kppp*c);   // forward (right side is reversed)
+  right_front_motor.writeMicroseconds(1500 + kppp*b);  // backward (right side is reversed)
 }
