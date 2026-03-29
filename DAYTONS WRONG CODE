@@ -175,17 +175,23 @@ void loop() {
   }
 }
 
-/*void homing() {
+void homing() {
     BluetoothSerial.println("Homing");
     // Orientate position
     orientate();
     _delay_ms(500);
     // Move to top left corner
-    move_backward();
+    state = BACKWARD;
+    prevState = HOMING;
+    InverseKinematics();
     _delay_ms(500);
+    state = LEFT;
+    prevState = BACKWARD;
     move_left();
     _delay_ms(500);
-  }*/
+    state = RIGHT;
+    prevState = HOMING;
+  }
 
 void InverseKinematics() {
   
