@@ -444,44 +444,79 @@ void rotateToAngle(float target_heading) {
 void rotateThatBi() {
   readOrientation();
   float start_heading = heading;
+  float prev_heading = heading;
+
+  float swept_angle = 0.0;
 
   float min_distance = 9999.0;
   float best_heading = start_heading;
 
-  BluetoothSerial.println("Starting sonar scan...");
+  float first_min_heading = -1.0;
+  float last_min_heading  = -1.0;
+  float min_tolerance = 0.5;   // cm
 
-  // rotate roughly 180 degrees while checking sonar
-  while (abs(angleDiff(heading, start_heading)) < 175.0) {
-    rotateCCWRaw(90);
+  BluetoothSerial.println("Starting FULL 360 sonar scan...");
 
-    delay(25);
+  while (swept_angle < 360.0) {
+    int scanSpeed = 90;
+    if (swept_angle > 300.0) scanSpeed = 70;
+    if (swept_angle > 340.0) scanSpeed = 55;
+
+    rotateCCWRaw(scanSpeed);
+    delay(20);
+
     readOrientation();
 
-    float sonar_distance = read_sonar();
+    float sonar_distance = 0;
+    for (int i = 0; i < 3; i++) {
+      sonar_distance += read_sonar();
+      delay(5);
+    }
+    sonar_distance /= 3.0;
+
+    float step = absAngleStep(heading, prev_heading);
+    swept_angle += step;
+    prev_heading = heading;
 
     BluetoothSerial.print("Heading: ");
     BluetoothSerial.print(heading);
     BluetoothSerial.print("  Sonar: ");
-    BluetoothSerial.println(sonar_distance);
+    BluetoothSerial.print(sonar_distance);
+    BluetoothSerial.print("  Swept: ");
+    BluetoothSerial.println(swept_angle);
 
-    // reject bad readings if needed
-    if (sonar_distance > 0 && sonar_distance < min_distance) {
-      min_distance = sonar_distance;
-      best_heading = heading;
+    if (sonar_distance > 0) {
+      if (sonar_distance < min_distance - min_tolerance) {
+        min_distance = sonar_distance;
+        first_min_heading = heading;
+        last_min_heading = heading;
+      } 
+      else if (abs(sonar_distance - min_distance) <= min_tolerance) {
+        last_min_heading = heading;
+      }
     }
   }
 
-  rotateStop();
+  stop();
+  delay(200);
 
-  BluetoothSerial.print("Shortest distance found at heading: ");
-  BluetoothSerial.println(best_heading);
-  BluetoothSerial.print("Min sonar distance: ");
+  if (first_min_heading >= 0.0 && last_min_heading >= 0.0) {
+    float band_width = angleDiff(last_min_heading, first_min_heading);
+    best_heading = wrap360(first_min_heading + band_width / 2.0);
+  }
+
+  BluetoothSerial.println("Scan complete");
+  BluetoothSerial.print("Min distance: ");
   BluetoothSerial.println(min_distance);
+  BluetoothSerial.print("First min heading: ");
+  BluetoothSerial.println(first_min_heading);
+  BluetoothSerial.print("Last min heading: ");
+  BluetoothSerial.println(last_min_heading);
+  BluetoothSerial.print("Best heading: ");
+  BluetoothSerial.println(best_heading);
 
-  // rotate back to the heading where wall was closest
   rotateToAngle(best_heading);
 
-  // call this direction "home"
   wall_heading = best_heading;
   home_heading = 180.0;
 
@@ -626,19 +661,19 @@ void strafe_right(float a, float b, float c, float d) {
   right_rear_motor.writeMicroseconds(1500 + kppp*c);   // forward (right side is reversed)
   right_front_motor.writeMicroseconds(1500 + kppp*b);  // backward (right side is reversed)
 }
-
+#define kp_rotation 1.4
 void rotateCCWRaw(int speed_cmd) {
   // tune sign if robot turns wrong way
-  left_front_motor.writeMicroseconds(1500 - speed_cmd);
-  left_rear_motor.writeMicroseconds(1500 - speed_cmd);
-  right_rear_motor.writeMicroseconds(1500 - speed_cmd);
-  right_front_motor.writeMicroseconds(1500 - speed_cmd);
+  left_front_motor.writeMicroseconds(1500 - kp_rotation * speed_cmd);
+  left_rear_motor.writeMicroseconds(1500 - kp_rotation * speed_cmd);
+  right_rear_motor.writeMicroseconds(1500 - kp_rotation * speed_cmd);
+  right_front_motor.writeMicroseconds(1500 - kp_rotation * speed_cmd);
 }
 
 void rotateCWRaw(int speed_cmd) {
   // tune sign if robot turns wrong way
-  left_front_motor.writeMicroseconds(1500 + speed_cmd);
-  left_rear_motor.writeMicroseconds(1500 + speed_cmd);
-  right_rear_motor.writeMicroseconds(1500 + speed_cmd);
-  right_front_motor.writeMicroseconds(1500 + speed_cmd);
+  left_front_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
+  left_rear_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
+  right_rear_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
+  right_front_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
 }
