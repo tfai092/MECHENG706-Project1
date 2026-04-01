@@ -363,14 +363,22 @@ void configAngle() {
 
 }
 
+float wrap360(float angle) {
+  while (angle >= 360.0) angle -= 360.0;
+  while (angle < 0.0) angle += 360.0;
+  return angle;
+}
 
 float angleDiff(float target, float current) {
   float diff = target - current;
-
   while (diff > 180.0) diff -= 360.0;
   while (diff < -180.0) diff += 360.0;
-
   return diff;
+}
+
+float absAngleStep(float new_heading, float old_heading) {
+  float step = angleDiff(new_heading, old_heading);
+  return abs(step);
 }
 
 void rotateStop() {
@@ -378,15 +386,17 @@ void rotateStop() {
 }
 
 void rotateToAngle(float target_heading) {
+  target_heading = wrap360(target_heading);
+
   readOrientation();
   float error = angleDiff(target_heading, heading);
 
-  while (abs(error) > 2.0) {
+  while (abs(error) > 1.0) {
     readOrientation();
     error = angleDiff(target_heading, heading);
 
-    int turnSpeed = (int)(2.5 * abs(error));
-    turnSpeed = constrain(turnSpeed, 60, 180);
+    int turnSpeed = (int)(2.0 * abs(error));
+    turnSpeed = constrain(turnSpeed, 45, 140);
 
     BluetoothSerial.print("Rotate target: ");
     BluetoothSerial.print(target_heading);
@@ -401,10 +411,34 @@ void rotateToAngle(float target_heading) {
       rotateCWRaw(turnSpeed);
     }
 
-    delay(20);
+    delay(15);
   }
 
-  rotateStop();
+  stop();
+  delay(120);
+
+  // Fine correction pass in case of overshoot/coast
+  readOrientation();
+  error = angleDiff(target_heading, heading);
+
+  while (abs(error) > 0.5) {
+    readOrientation();
+    error = angleDiff(target_heading, heading);
+
+    int turnSpeed = 45;   // gentle trim speed
+
+    if (error > 0) {
+      rotateCCWRaw(turnSpeed);
+    } else {
+      rotateCWRaw(turnSpeed);
+    }
+
+    delay(10);
+    stop();
+    delay(25);
+  }
+
+  stop();
 }
 
 void rotateThatBi() {
