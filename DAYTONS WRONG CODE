@@ -21,14 +21,18 @@ const int echoPin = 49;
 float distance_cm;
 long duration;
 
+float home_heading = 180.0;   // software "home"
+float wall_heading = 0.0;     // real heading where shortest sonar distance was found
+
 // Declare robot width (cm)
 float robot_width = 25;
 
 // For Homing
 float effort;
 float heading;
-float perpen = 220;  // Angle at wall
+// float perpen = 290;  // Angle at wall
 
+float angle_referece;
 // Serial Data input pin
 #define BLUETOOTH_RX 19
 // Serial Data output pin
@@ -125,9 +129,8 @@ void loop() {
   
   switch(state) {
     case HOMING:
-      InverseKinematics();
       homing();
-      state = FORWARD;
+      state = STOP;          // for testing only
       prevState = HOMING;
       break;
 
@@ -176,7 +179,7 @@ void loop() {
   }
 }
 
-void homing() {
+/*void homing() {
     BluetoothSerial.println("Homing");
     _delay_ms(500);
     // Move to top left corner
@@ -187,11 +190,30 @@ void homing() {
     state = LEFT;
     prevState = BACKWARD;
     _delay_ms(500);
-  }
+  }*/
+
+void homing() {
+  BluetoothSerial.println("=== HOMING TEST START ===");
+  delay(500);
+
+  stop();
+  delay(300);
+
+  rotateThatBi();   // scan with sonar, find shortest distance, rotate back to it
+
+  stop();
+  delay(300);
+
+  BluetoothSerial.println("=== HOMING TEST COMPLETE ===");
+  BluetoothSerial.print("Wall heading = ");
+  BluetoothSerial.println(wall_heading);
+  BluetoothSerial.print("Software home = ");
+  BluetoothSerial.println(home_heading);
+}
 
 void InverseKinematics() {
   
-  float target_heading = 220;
+  float target_heading = 305;
   float w_error, x_error, y_error, overall_error;
 
   distance_y = read_sonar();
@@ -269,7 +291,7 @@ void InverseKinematics() {
 
       float kp_x = 0.35;
       float kp_y = 0.05;
-      float Kp = 0.5;
+      float Kp = 1;
 
       float omega;
     
@@ -317,6 +339,121 @@ void InverseKinematics() {
 }
 BluetoothSerial.println("DONE LOOP");
 }
+
+void configAngle() {
+
+  if (bno08x.getSensorEvent(&sensorValue)) {
+
+    if (sensorValue.sensorId == SH2_ROTATION_VECTOR) {
+
+      float w = sensorValue.un.rotationVector.real;
+      float x = sensorValue.un.rotationVector.i;
+      float y = sensorValue.un.rotationVector.j;
+      float z = sensorValue.un.rotationVector.k;
+
+      // convert quaternion to yaw angle
+      float yaw = atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z));
+
+      angle_referece = yaw * 180 / PI;   // convert to degrees
+
+      Serial.print("Angle (Yaw): ");
+      Serial.println(angle_referece);
+    }
+  }
+
+}
+
+
+float angleDiff(float target, float current) {
+  float diff = target - current;
+
+  while (diff > 180.0) diff -= 360.0;
+  while (diff < -180.0) diff += 360.0;
+
+  return diff;
+}
+
+void rotateStop() {
+  stop();
+}
+
+void rotateToAngle(float target_heading) {
+  readOrientation();
+  float error = angleDiff(target_heading, heading);
+
+  while (abs(error) > 2.0) {
+    readOrientation();
+    error = angleDiff(target_heading, heading);
+
+    int turnSpeed = (int)(2.5 * abs(error));
+    turnSpeed = constrain(turnSpeed, 60, 180);
+
+    BluetoothSerial.print("Rotate target: ");
+    BluetoothSerial.print(target_heading);
+    BluetoothSerial.print("  heading: ");
+    BluetoothSerial.print(heading);
+    BluetoothSerial.print("  error: ");
+    BluetoothSerial.println(error);
+
+    if (error > 0) {
+      rotateCCWRaw(turnSpeed);
+    } else {
+      rotateCWRaw(turnSpeed);
+    }
+
+    delay(20);
+  }
+
+  rotateStop();
+}
+
+void rotateThatBi() {
+  readOrientation();
+  float start_heading = heading;
+
+  float min_distance = 9999.0;
+  float best_heading = start_heading;
+
+  BluetoothSerial.println("Starting sonar scan...");
+
+  // rotate roughly 180 degrees while checking sonar
+  while (abs(angleDiff(heading, start_heading)) < 175.0) {
+    rotateCCWRaw(90);
+
+    delay(25);
+    readOrientation();
+
+    float sonar_distance = read_sonar();
+
+    BluetoothSerial.print("Heading: ");
+    BluetoothSerial.print(heading);
+    BluetoothSerial.print("  Sonar: ");
+    BluetoothSerial.println(sonar_distance);
+
+    // reject bad readings if needed
+    if (sonar_distance > 0 && sonar_distance < min_distance) {
+      min_distance = sonar_distance;
+      best_heading = heading;
+    }
+  }
+
+  rotateStop();
+
+  BluetoothSerial.print("Shortest distance found at heading: ");
+  BluetoothSerial.println(best_heading);
+  BluetoothSerial.print("Min sonar distance: ");
+  BluetoothSerial.println(min_distance);
+
+  // rotate back to the heading where wall was closest
+  rotateToAngle(best_heading);
+
+  // call this direction "home"
+  wall_heading = best_heading;
+  home_heading = 180.0;
+
+  BluetoothSerial.println("Home direction assigned.");
+}
+
 
 
 // void orientate() {
@@ -412,6 +549,7 @@ int read_sonar() {
   return distance_cm;
 }
 
+
 #define kppp 1
 void forward(float a, float b, float c, float d) {
   left_front_motor.writeMicroseconds(1500 + kppp*a);
@@ -453,4 +591,20 @@ void strafe_right(float a, float b, float c, float d) {
   left_rear_motor.writeMicroseconds(1500 + kppp*d);    // backward
   right_rear_motor.writeMicroseconds(1500 + kppp*c);   // forward (right side is reversed)
   right_front_motor.writeMicroseconds(1500 + kppp*b);  // backward (right side is reversed)
+}
+
+void rotateCCWRaw(int speed_cmd) {
+  // tune sign if robot turns wrong way
+  left_front_motor.writeMicroseconds(1500 - speed_cmd);
+  left_rear_motor.writeMicroseconds(1500 - speed_cmd);
+  right_rear_motor.writeMicroseconds(1500 - speed_cmd);
+  right_front_motor.writeMicroseconds(1500 - speed_cmd);
+}
+
+void rotateCWRaw(int speed_cmd) {
+  // tune sign if robot turns wrong way
+  left_front_motor.writeMicroseconds(1500 + speed_cmd);
+  left_rear_motor.writeMicroseconds(1500 + speed_cmd);
+  right_rear_motor.writeMicroseconds(1500 + speed_cmd);
+  right_front_motor.writeMicroseconds(1500 + speed_cmd);
 }
