@@ -277,17 +277,21 @@ void orientate() {
   const float Kp = 5;
   const float Ki = 0.25;
 
-  const float TOLERANCE = 2;          // Degrees
-  const int STABLE_CYCLES = 5;        // Must stay within tolerance for 5 loops
+  const float TOLERANCE = 2;          
+  const int STABLE_CYCLES = 5;        
+
+  const int LOOP_TIME_MS = 20;   // <-- 50 Hz loop
+
   int stable_count = 0;
 
   unsigned long lastTime = millis();
 
   while (true) {
+    unsigned long loopStart = millis();
+
     // Compute dt (in seconds)
-    unsigned long currentTime = millis();
-    float dt = (currentTime - lastTime) / 1000.0;
-    lastTime = currentTime;
+    float dt = (loopStart - lastTime) / 1000.0;
+    lastTime = loopStart;
 
     readOrientation();
     w_error = perpen - heading;
@@ -302,18 +306,18 @@ void orientate() {
     // PI control
     float effort = Kp * w_error + Ki * integral;
 
-    // Clamp effort to motor limits
+    // Clamp effort
     if (effort > 200) effort = 200;
     if (effort < -200) effort = -200;
 
-    // Send effort to motors
+    // Apply motor command
     if (effort > 0) {
       cw(effort);
     } else {
-      ccw((-1)*effort);
+      ccw(-effort);
     }
 
-    // Stable stop condition
+    // Stability check
     if (abs(w_error) < TOLERANCE) {
       stable_count++;
     } else {
@@ -323,6 +327,11 @@ void orientate() {
     if (stable_count >= STABLE_CYCLES) {
       stop();
       break;
+    }
+
+    // Enforce loop timing
+    while (millis() - loopStart < LOOP_TIME_MS) {
+      // wait
     }
   }
 }
