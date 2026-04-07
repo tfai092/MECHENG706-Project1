@@ -79,6 +79,8 @@ float L = 0.15;
 float l = 0.09;
 float distance_from_wall = 60;
 
+
+
 enum State {
     HOMING,
     FORWARD,
@@ -130,20 +132,24 @@ void loop() {
   switch(state) {
     case HOMING:
       homing();
-      state = STOP;          // for testing only
-      prevState = HOMING;
       break;
 
     case FORWARD:
+      BluetoothSerial.print("WE IN FORWARD");
+
     //strafe_left(300);
       InverseKinematics(); 
       //_delay_ms(1000);
-      state = RIGHT;
+      if (prevState == HOMING) {
+        state = LEFT;
+      } else {
+        state = RIGHT;
+      }
       prevState = FORWARD;
     break;
 
     case RIGHT:
-      distance_from_wall += 50;
+      distance_from_wall += 30;
       InverseKinematics();
       if (prevState == FORWARD) {
         state = BACKWARD;
@@ -154,6 +160,8 @@ void loop() {
       break;
 
     case BACKWARD:
+      BluetoothSerial.print("WE IN BACKWARD");
+
       InverseKinematics();
       state = RIGHT;
       prevState = BACKWARD;
@@ -199,32 +207,46 @@ void homing() {
   stop();
   delay(300);
 
-  rotateThatBi();   // scan with sonar, find shortest distance, rotate back to it
-
-  stop();
-  delay(300);
+  rotateThatBi();
 
   BluetoothSerial.println("=== HOMING TEST COMPLETE ===");
-  BluetoothSerial.print("Wall heading = ");
-  BluetoothSerial.println(wall_heading);
-  BluetoothSerial.print("Software home = ");
-  BluetoothSerial.println(home_heading);
+
+  float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
+  float rearsignalADClong  = analogRead(REAR_LONG_IR_SENSOR);
+
+  float front_distance_long = 17948 * pow(frontsignalADClong, -1.22);
+  float rear_distance_long  = 17948 * pow(rearsignalADClong, -1.22);
+
+  BluetoothSerial.print("Front long distance: ");
+  BluetoothSerial.println(front_distance_long);
+  BluetoothSerial.print("Rear long distance: ");
+  BluetoothSerial.println(rear_distance_long);
+
+  prevState = HOMING;
+
+  if (front_distance_long <= rear_distance_long) {
+    state = FORWARD;
+    BluetoothSerial.println("NEXT STATE = FORWARD");
+  } else {
+    state = BACKWARD;
+    BluetoothSerial.println("NEXT STATE = BACKWARD");
+  }
 }
 
 void InverseKinematics() {
   
-  float target_heading = 305;
+  float target_heading = wall_heading;
   float w_error, x_error, y_error, overall_error;
 
   distance_y = read_sonar();
 
-  // if (state == FORWARD) {
+  if (state == FORWARD) {
     signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
     signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
-  // } else if (state == BACKWARD){
-  //   signalADCshort = analogRead(BACK_SHORT_IR_SENSOR);
-  //   signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
-  // }
+  } else if (state == BACKWARD){
+    signalADCshort = analogRead(REAR_SHORT_IR_SENSOR);
+    signalADClong  = analogRead(REAR_LONG_IR_SENSOR);
+  }
   // Convert IR readings to distance
   distance_long  = 17948 * pow(signalADClong, -1.22);
   distance_short = 12.10 / (signalADCshort * (5.0 / 1024.0)) - 0.42;
@@ -245,10 +267,13 @@ void InverseKinematics() {
   if (state == FORWARD) {
     BluetoothSerial.println("FORWARD");
     overall_error = x_error;
-  } else if (state == RIGHT || state == LEFT) {
+  } else if (state == RIGHT) {
     BluetoothSerial.println("RIGHT");
     overall_error = y_error;
-  } else if (state == BACKWARD) {
+  } else if (state == LEFT) {
+    BluetoothSerial.println("LEFT");
+    overall_error = y_error;
+  }else if (state == BACKWARD) {
     BluetoothSerial.println("BACK");
     overall_error = x_error;
   } else if (state == HOMING) {
@@ -263,8 +288,15 @@ void InverseKinematics() {
       readOrientation();
       distance_y = read_sonar();
 
-      signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
-      signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
+      if (state == FORWARD) {
+        signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
+        signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
+      } else if (state == BACKWARD){
+        signalADCshort = analogRead(REAR_SHORT_IR_SENSOR);
+        signalADClong  = analogRead(REAR_LONG_IR_SENSOR);
+      }
+      //signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
+      //signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
 
       // Convert IR readings to distance
       distance_long  = 17948 * pow(signalADClong, -1.22);
@@ -284,10 +316,10 @@ void InverseKinematics() {
       // if (w_error > 180) w_error -= 360;
       // if (w_error < -180) w_error += 360;
 
-      BluetoothSerial.print("w_error=   ");
-      BluetoothSerial.println(w_error);
-      BluetoothSerial.print("heading=   ");
-      BluetoothSerial.println(heading);
+      // BluetoothSerial.print("w_error=   ");
+      // BluetoothSerial.println(w_error);
+      BluetoothSerial.print("overall_error=   ");
+      BluetoothSerial.println(overall_error);
 
       float kp_x = 0.35;
       float kp_y = 0.05;
@@ -336,7 +368,11 @@ void InverseKinematics() {
         overall_error = x_error;
       }
     }
-}
+// BluetoothSerial.println("INSIDE LOOP");
+
+  } 
+  
+
 BluetoothSerial.println("DONE LOOP");
 }
 
