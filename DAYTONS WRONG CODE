@@ -89,10 +89,13 @@ enum State {
     STOP
   };
 
-State state = HOMING; // CHANGED THISSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
-State prevState = HOMING;
+State state; // CHANGED THISSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+State prevState;
 
 void setup(void) {
+
+  state = HOMING;
+  prevState = HOMING;
 
   BluetoothSerial.println("SETUP RAN");
   pinMode(trigPin, OUTPUT);
@@ -131,14 +134,14 @@ void loop() {
   
   switch(state) {
     case HOMING:
-      BluetoothSerial.println("STATE = HOM");
+      
       homing();
       prevState = HOMING;
       break;
 
     case FORWARD:
       InverseKinematics(); 
-      BluetoothSerial.println("STATE = FOR");
+
       if (prevState == HOMING) {
         state = LEFT;
       } else {
@@ -149,6 +152,8 @@ void loop() {
     break;
 
     case RIGHT:
+    BluetoothSerial.println("NEXT STATE = RIGHT");
+
       distance_from_wall += 30;
       InverseKinematics();
       if (prevState == FORWARD) {
@@ -166,8 +171,10 @@ void loop() {
       break;
     
     case LEFT:
+    BluetoothSerial.println("NEXT STATE = LEFT");
+
       InverseKinematics();
-      BluetoothSerial.println("WE ARE AT HOME");
+      // BluetoothSerial.println("WE ARE AT HOME");
       
       if (prevState == FORWARD) {
         state = BACKWARD;
@@ -292,12 +299,26 @@ void InverseKinematics() {
       y_error = distance_y - distance_from_wall;
       w_error = angleDiff(target_heading, heading);
 
-      BluetoothSerial.print("x_error=   ");
-      BluetoothSerial.print(x_error);
-      BluetoothSerial.print("    y_error=   ");
-      BluetoothSerial.print(y_error);
-      BluetoothSerial.print("    w_error=   ");
-      BluetoothSerial.println(w_error);
+      // BluetoothSerial.print("x_error=   ");
+      // BluetoothSerial.print(x_error);
+      // BluetoothSerial.print("    y_error=   ");
+      // BluetoothSerial.print(y_error);
+      // BluetoothSerial.print("    w_error=   ");
+      // BluetoothSerial.println(w_error);
+
+      // BluetoothSerial.print("target_heading=   ");
+      // BluetoothSerial.print(target_heading); 
+      //  BluetoothSerial.print("    heading=   ");
+      // BluetoothSerial.println(heading); 
+
+      // BluetoothSerial.print("theta1=   ");
+      BluetoothSerial.print(theta1);
+      BluetoothSerial.print("   ");
+      BluetoothSerial.print(theta2);
+      BluetoothSerial.print("   ");
+      BluetoothSerial.print(theta3);
+      BluetoothSerial.print("  ");
+      BluetoothSerial.println(theta4);
 
       float kp_x, Kp, kp_y;
       float omega;
@@ -310,7 +331,7 @@ void InverseKinematics() {
       } else if (state == RIGHT || state == LEFT) {
         kp_x = 0;
         kp_y = 0.25;
-        Kp = 0;
+        Kp = 0.8;
       } 
       vy = -kp_y * y_error;
       vx = kp_x * x_error;
@@ -330,13 +351,15 @@ void InverseKinematics() {
       if (state == FORWARD) {
         forward(theta1, theta2, theta3, theta4);
         overall_error = x_error;
+      // BluetoothSerial.println("FORWARDDDD");
+
       } else if (state == RIGHT) {
-      BluetoothSerial.println("RIGHTTT");
+      // BluetoothSerial.println("RIGHTTT");
 
         strafe_right(theta1, theta2, theta3, theta4);
         overall_error = y_error;
       } else if (state == LEFT) {
-      BluetoothSerial.println("LEFTTTT");
+      // BluetoothSerial.println("LEFTTTT");
 
         strafe_left(theta1, theta2, theta3, theta4);
         overall_error = y_error;
@@ -344,7 +367,7 @@ void InverseKinematics() {
         ccw(theta1, theta2, theta3, theta4);
         overall_error = w_error;
       } else if (state == BACKWARD) {
-      BluetoothSerial.println("BACKWARDDD");
+      // BluetoothSerial.println("BACKWARDDD");
 
         reverse(theta1, theta2, theta3, theta4);
         overall_error = x_error;
@@ -398,8 +421,8 @@ void rotateToAngle(float target_heading) {
     // BluetoothSerial.print(target_heading);
     // BluetoothSerial.print("  heading: ");
     // BluetoothSerial.print(heading);
-    //BluetoothSerial.print("  error: ");
-    //BluetoothSerial.println(error);
+    BluetoothSerial.print("  error: ");
+    BluetoothSerial.println(error);
 
     if (error > 0) {
       rotateCCWRaw(turnSpeed);
