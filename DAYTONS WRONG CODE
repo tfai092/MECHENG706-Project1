@@ -154,7 +154,7 @@ void loop() {
     case RIGHT:
     BluetoothSerial.println("NEXT STATE = RIGHT");
 
-      distance_from_wall += 30;
+      distance_from_wall += 25;
       InverseKinematics();
       if (prevState == FORWARD) {
         state = BACKWARD;
@@ -165,8 +165,14 @@ void loop() {
       break;
 
     case BACKWARD:
+    BluetoothSerial.println("NEXT STATE = BACKWARD");
+
       InverseKinematics();
-      state = RIGHT;
+      if (prevState == HOMING) {
+        state = LEFT;
+      } else  {
+        state = RIGHT;
+      }
       prevState = BACKWARD;
       break;
     
@@ -306,19 +312,11 @@ void InverseKinematics() {
       // BluetoothSerial.print("    w_error=   ");
       // BluetoothSerial.println(w_error);
 
-      // BluetoothSerial.print("target_heading=   ");
-      // BluetoothSerial.print(target_heading); 
-      //  BluetoothSerial.print("    heading=   ");
-      // BluetoothSerial.println(heading); 
+      BluetoothSerial.print("target_heading=   ");
+      BluetoothSerial.print(target_heading); 
+       BluetoothSerial.print("    heading=   ");
+      BluetoothSerial.println(heading); 
 
-      // BluetoothSerial.print("theta1=   ");
-      BluetoothSerial.print(theta1);
-      BluetoothSerial.print("   ");
-      BluetoothSerial.print(theta2);
-      BluetoothSerial.print("   ");
-      BluetoothSerial.print(theta3);
-      BluetoothSerial.print("  ");
-      BluetoothSerial.println(theta4);
 
       float kp_x, Kp, kp_y;
       float omega;
@@ -326,12 +324,12 @@ void InverseKinematics() {
       if (state == FORWARD || state == BACKWARD) {
         kp_x = 0.25;
         kp_y = 0;
-        Kp = 0.5;
+        Kp = 0.2;
         //vy=0;
       } else if (state == RIGHT || state == LEFT) {
         kp_x = 0;
-        kp_y = 0.25;
-        Kp = 0.8;
+        kp_y = 0.3;
+        Kp = 0;
       } 
       vy = -kp_y * y_error;
       vx = kp_x * x_error;
@@ -342,6 +340,18 @@ void InverseKinematics() {
       } else if (vx < 0) {
        vx = constrain(vx, -1, -10);
       }
+
+      // BluetoothSerial.print("omega=   ");
+      // BluetoothSerial.print(omega);
+      // BluetoothSerial.print("   ");
+      // BluetoothSerial.print(theta1);
+      // BluetoothSerial.print("   ");
+      // BluetoothSerial.print(theta2);
+      // BluetoothSerial.print("   ");
+      // BluetoothSerial.print(theta3);
+      // BluetoothSerial.print("  ");
+      // BluetoothSerial.println(theta4);
+
 
       theta1 = (1.0 / Rw) * (vx - vy - (L + l) * omega);  // front left
       theta2 = (-1.0 / Rw) * (vx + vy + (L + l) * omega);  // front right
@@ -639,10 +649,10 @@ void strafe_left(float a, float b, float c, float d) {
 }
 
 void strafe_right(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 + kppp*a);   // forward
-  left_rear_motor.writeMicroseconds(1500 + kppp*d);    // backward
-  right_rear_motor.writeMicroseconds(1500 + kppp*c);   // forward (right side is reversed)
-  right_front_motor.writeMicroseconds(1500 + kppp*b);  // backward (right side is reversed)
+  left_front_motor.writeMicroseconds(1500 - kppp*a);   // forward
+  left_rear_motor.writeMicroseconds(1500 - kppp*d);    // backward
+  right_rear_motor.writeMicroseconds(1500 - kppp*c);   // forward (right side is reversed)
+  right_front_motor.writeMicroseconds(1500 - kppp*b);  // backward (right side is reversed)
 }
 #define kp_rotation 1.4
 void rotateCCWRaw(int speed_cmd) {
