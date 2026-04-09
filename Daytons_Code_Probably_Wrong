@@ -323,19 +323,19 @@ void InverseKinematics() {
       float omega;
 
       if (state == FORWARD || state == BACKWARD) {
-        kp_x = 0.25;
-        kp_y = 0.05;
-        Kp = 0.03;
-        Ki = 0.0005;   // start small
+        kp_x = 0.5;
+        kp_y = 0.5;
+        Kp = 0.2;
+        Ki = 0.01;   // start small
       } else if (state == RIGHT || state == LEFT) {
-        kp_x = 00.5;
-        kp_y = 0.3;
-        Kp = 0.05;   // optional small heading correction while strafing
+        kp_x = 0.5;
+        kp_y = 0.5;
+        Kp = 0.2;   // optional small heading correction while strafing
         Ki = 0;  // start very small
       } else {
         kp_x = 0.5;
-        kp_y = 0;
-        Kp = 0.1;
+        kp_y = 0.5;
+        Kp = 0.2;
         Ki = 0;
       }
 
@@ -352,6 +352,14 @@ void InverseKinematics() {
       vy = kp_y * y_error;
       vx = kp_x * x_error;
       omega = Kp * w_error + Ki * w_error_integral;
+
+      if (state == RIGHT) {
+        vy = -1 * vy;
+      }
+
+      if (state == BACKWARD) {
+        vx = -1 * vx;
+      }
 
       // if (vx > 0) {
       //   vx = constrain(vx, 1, 10);
@@ -621,10 +629,10 @@ void forward(float a, float b, float c, float d) {
 }
 
 void reverse(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 - kppp*a);
-  left_rear_motor.writeMicroseconds(1500 - kppp*d);
-  right_rear_motor.writeMicroseconds(1500 - kppp*c);
-  right_front_motor.writeMicroseconds(1500 - kppp*b);
+  left_front_motor.writeMicroseconds(1500 + kppp*a);
+  left_rear_motor.writeMicroseconds(1500 + kppp*d);
+  right_rear_motor.writeMicroseconds(1500 + kppp*c);
+  right_front_motor.writeMicroseconds(1500 + kppp*b);
 }
 
 void ccw(float a, float b, float c, float d) {
@@ -649,10 +657,10 @@ void strafe_left(float a, float b, float c, float d) {
 }
 
 void strafe_right(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 - kppp*a);   // forward
-  left_rear_motor.writeMicroseconds(1500 - kppp*d);    // backward
-  right_rear_motor.writeMicroseconds(1500 - kppp*c);   // forward (right side is reversed)
-  right_front_motor.writeMicroseconds(1500 - kppp*b);  // backward (right side is reversed)
+  left_front_motor.writeMicroseconds(1500 + kppp*a);   // forward
+  left_rear_motor.writeMicroseconds(1500 + kppp*d);    // backward
+  right_rear_motor.writeMicroseconds(1500 + kppp*c);   // forward (right side is reversed)
+  right_front_motor.writeMicroseconds(1500 + kppp*b);  // backward (right side is reversed)
 }
 #define kp_rotation 1.4
 void rotateCCWRaw(int speed_cmd) {
@@ -670,3 +678,4 @@ void rotateCWRaw(int speed_cmd) {
   right_rear_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
   right_front_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
 }
+
