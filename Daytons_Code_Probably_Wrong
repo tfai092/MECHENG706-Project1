@@ -313,7 +313,7 @@ void InverseKinematics() {
 
       x_error = current_distance - 10;
       y_error = distance_y - distance_from_wall;
-      w_error = angleDiff(target_heading, heading);
+      w_error = angleDiff(heading, target_heading);
 
 
       // BluetoothSerial.print("    heading=   ");
@@ -328,12 +328,12 @@ void InverseKinematics() {
         Kp = 0.03;
         Ki = 0.0005;   // start small
       } else if (state == RIGHT || state == LEFT) {
-        kp_x = 0.0;
+        kp_x = 00.5;
         kp_y = 0.3;
         Kp = 0.05;   // optional small heading correction while strafing
         Ki = 0;  // start very small
       } else {
-        kp_x = 0;
+        kp_x = 0.5;
         kp_y = 0;
         Kp = 0.1;
         Ki = 0;
@@ -345,25 +345,25 @@ void InverseKinematics() {
       }
 
       // anti-windup clamp
-      w_error_integral = constrain(w_error_integral, -5.0, 5.0);
+      // w_error_integral = constrain(w_error_integral, -5.0, 5.0);
       // BluetoothSerial.print("w_error_integral=   ");
       // BluetoothSerial.println(w_error_integral);
 
-      vy = -kp_y * y_error;
+      vy = kp_y * y_error;
       vx = kp_x * x_error;
       omega = Kp * w_error + Ki * w_error_integral;
 
-      if (vx > 0) {
-        vx = constrain(vx, 1, 10);
-      } else if (vx < 0) {
-        vx = constrain(vx, -10, -1);
-      }
+      // if (vx > 0) {
+      //   vx = constrain(vx, 1, 10);
+      // } else if (vx < 0) {
+      //   vx = constrain(vx, -10, -1);
+      // }
 
-      if (vy > 0) {
-        vy = constrain(vy, 1, 10);
-      } else if (vy < 0) {
-        vy = constrain(vy, -10, -1);
-      }
+      // if (vy > 0) {
+      //   vy = constrain(vy, 1, 10);
+      // } else if (vy < 0) {
+      //   vy = constrain(vy, -10, -1);
+      // }
       // BluetoothSerial.print("vy   ");
       // BluetoothSerial.println(vy);
 
@@ -642,16 +642,16 @@ void cw(float speed_cw) {
 }
 
 void strafe_left(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 - kppp*a);   // forward
+  left_front_motor.writeMicroseconds(1500 + kppp*a);   // forward
   left_rear_motor.writeMicroseconds(1500 + kppp*d);    // backward
-  right_rear_motor.writeMicroseconds(1500 - kppp*c);   // forward (right side is reversed)
+  right_rear_motor.writeMicroseconds(1500 + kppp*c);   // forward (right side is reversed)
   right_front_motor.writeMicroseconds(1500 + kppp*b);
 }
 
 void strafe_right(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 + kppp*a);   // forward
+  left_front_motor.writeMicroseconds(1500 - kppp*a);   // forward
   left_rear_motor.writeMicroseconds(1500 - kppp*d);    // backward
-  right_rear_motor.writeMicroseconds(1500 + kppp*c);   // forward (right side is reversed)
+  right_rear_motor.writeMicroseconds(1500 - kppp*c);   // forward (right side is reversed)
   right_front_motor.writeMicroseconds(1500 - kppp*b);  // backward (right side is reversed)
 }
 #define kp_rotation 1.4
