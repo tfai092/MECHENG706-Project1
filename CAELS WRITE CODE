@@ -377,12 +377,12 @@ void InverseKinematics() {
       if (state == FORWARD || state == BACKWARD) {
         kp_x = 0.25;
         kp_y = 0.0;
-        Kp = 0.03;
+        Kp = 0.1;
         Ki = 0.001;   // start small
       } else if (state == RIGHT || state == LEFT) {
         kp_x = 0.0;
         kp_y = 0.3;
-        Kp = 0.05;   // optional small heading correction while strafing
+        Kp = 0.1;   // optional small heading correction while strafing
         Ki = 0;  // start very small
       } else {
         kp_x = 0;
@@ -409,15 +409,15 @@ void InverseKinematics() {
       omega = Kp * w_error + Ki * w_error_integral;
 
       if (vx > 0) {
-        vx = constrain(vx, 0, 10);
+        vx = constrain(vx, 0, 7);
       } else if (vx < 0) {
-        vx = constrain(vx, -10, 0);
+        vx = constrain(vx, -7, 0);
       }
 
       if (vy > 0) {
-        vy = constrain(vy, 0, 10);
+        vy = constrain(vy, 0, 7);
       } else if (vy < 0) {
-        vy = constrain(vy, -10, 0);
+        vy = constrain(vy, -7, 0);
       }
       // BluetoothSerial.print("vy   ");
       // BluetoothSerial.println(vy);
@@ -730,9 +730,9 @@ int read_sonar() {
 }
 
 #define kplf 0.9
-#define kplr 0.9
-#define kprf 1
-#define kprr 1
+#define kplr 0.85
+#define kprf 1.05
+#define kprr 0.95
 void forward(float a, float b, float c, float d) {
   left_front_motor.writeMicroseconds(1500 + kplf*a);
   left_rear_motor.writeMicroseconds(1500 + kplr*d);
