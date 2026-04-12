@@ -10,8 +10,8 @@ Adafruit_BNO08x bno08x(-1);
 sh2_SensorValue_t sensorValue;
 
 //Default motor control pins
-const byte left_front = 51;
-const byte left_rear = 50;
+const byte left_front = 50;
+const byte left_rear = 51;
 const byte right_rear = 46;
 const byte right_front = 47;
 
@@ -146,7 +146,6 @@ void loop() {
   
   switch(state) {
     case HOMING:
-      
       homing();
       MapOrientation();
       prevState = HOMING;
@@ -730,48 +729,50 @@ int read_sonar() {
   return distance_cm;
 }
 
-
-#define kppp 1
+#define kplf 0.9
+#define kplr 0.9
+#define kprf 1
+#define kprr 1
 void forward(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 + kppp*a);
-  left_rear_motor.writeMicroseconds(1500 + kppp*d);
-  right_rear_motor.writeMicroseconds(1500 + kppp*c);
-  right_front_motor.writeMicroseconds(1500 + kppp*b);
+  left_front_motor.writeMicroseconds(1500 + kplf*a);
+  left_rear_motor.writeMicroseconds(1500 + kplr*d);
+  right_rear_motor.writeMicroseconds(1500 + kprr*c);
+  right_front_motor.writeMicroseconds(1500 + kprf*b);
 }
 
 void reverse(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 - kppp*a);
-  left_rear_motor.writeMicroseconds(1500 - kppp*d);
-  right_rear_motor.writeMicroseconds(1500 - kppp*c);
-  right_front_motor.writeMicroseconds(1500 - kppp*b);
+  left_front_motor.writeMicroseconds(1500 - kplf*a);
+  left_rear_motor.writeMicroseconds(1500 - kplr*d);
+  right_rear_motor.writeMicroseconds(1500 - kprr*c);
+  right_front_motor.writeMicroseconds(1500 - kprf*b);
 }
 
 void ccw(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 + kppp*a);
-  left_rear_motor.writeMicroseconds(1500 + kppp*d);
-  right_rear_motor.writeMicroseconds(1500 + kppp*c);
-  right_front_motor.writeMicroseconds(1500 + kppp*b);
+  left_front_motor.writeMicroseconds(1500 + kplf*a);
+  left_rear_motor.writeMicroseconds(1500 + kplr*d);
+  right_rear_motor.writeMicroseconds(1500 + kprr*c);
+  right_front_motor.writeMicroseconds(1500 + kprf*b);
 }
 
-void cw(float speed_cw) {
-  left_front_motor.writeMicroseconds(1500 + speed_cw);
-  left_rear_motor.writeMicroseconds(1500 + speed_cw);
-  right_rear_motor.writeMicroseconds(1500 + speed_cw);
-  right_front_motor.writeMicroseconds(1500 + speed_cw);
+void cw(float a, float b, float c, float d) {
+  left_front_motor.writeMicroseconds(1500 + kplf*a);
+  left_rear_motor.writeMicroseconds(1500 + kplr*d);
+  right_rear_motor.writeMicroseconds(1500 + kprr*c);
+  right_front_motor.writeMicroseconds(1500 + kprf*b);
 }
 
 void strafe_left(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 + kppp*a);   // forward
-  left_rear_motor.writeMicroseconds(1500 + kppp*d);    // backward
-  right_rear_motor.writeMicroseconds(1500 + kppp*c);   // forward (right side is reversed)
-  right_front_motor.writeMicroseconds(1500 + kppp*b);
+  left_front_motor.writeMicroseconds(1500 + kplf*a);   // forward
+  left_rear_motor.writeMicroseconds(1500 + kplr*d);    // backward
+  right_rear_motor.writeMicroseconds(1500 + kprr*c);   // forward (right side is reversed)
+  right_front_motor.writeMicroseconds(1500 + kprf*b);
 }
 
 void strafe_right(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 + kppp*a);   // forward
-  left_rear_motor.writeMicroseconds(1500 + kppp*d);    // backward
-  right_rear_motor.writeMicroseconds(1500 + kppp*c);   // forward (right side is reversed)
-  right_front_motor.writeMicroseconds(1500 + kppp*b);  // backward (right side is reversed)
+  left_front_motor.writeMicroseconds(1500 + kplf*a);   // forward
+  left_rear_motor.writeMicroseconds(1500 + kplr*d);    // backward
+  right_rear_motor.writeMicroseconds(1500 + kprr*c);   // forward (right side is reversed)
+  right_front_motor.writeMicroseconds(1500 + kprf*b);  // backward (right side is reversed)
 }
 #define kp_rotation 1.4
 void rotateCCWRaw(int speed_cmd) {
