@@ -124,7 +124,7 @@ void setup(void) {
   }
 
   // Enable rotation vector reporting AFTER successful initialization
-  bno08x.enableReport(SH2_ROTATION_VECTOR);
+  bno08x.enableReport(SH2_GAME_ROTATION_VECTOR);
 
   // Setup the Serial port and pointer, the pointer allows switching the debug info through the USB port(Serial) or Bluetooth port(Serial1) with ease.
   Serial.begin(115200);
@@ -302,12 +302,12 @@ void InverseKinematics() {
   distance_long  = 17948 * pow(signalADClong, -1.22);
   distance_short = 12.10 / (signalADCshort * (5.0 / 1024.0)) - 0.42;
 
-  if (distance_long >= 25) {
+  //if (distance_long >= 25) {
     current_distance = distance_long;
-  } 
-  else {
-    current_distance = distance_short;
-  }
+  //} 
+  //else {
+   // current_distance = distance_short;
+  //}
 
   readOrientation();
   x_error = current_distance;
@@ -333,7 +333,7 @@ void InverseKinematics() {
   while (abs(overall_error) > 5) {
 
     unsigned long now = millis();
-    if (now - prev_time >= 30) {  
+    if (now - prev_time >= 100) {  
       prev_time = now;
 
       // time step for integral
@@ -355,11 +355,11 @@ void InverseKinematics() {
       distance_long  = 17948 * pow(signalADClong, -1.22);
       distance_short = 12.10 / (signalADCshort * (5.0 / 1024.0)) - 0.42;
 
-      if (distance_long >= 25) {
+      //if (distance_long >= 25) {
         current_distance = distance_long;
-      } else {
-        current_distance = distance_short;
-      }
+      //} else {
+      //  current_distance = distance_short;
+      //}
 
       x_error = current_distance - 10;
       y_error = distance_y - distance_from_wall;
@@ -374,15 +374,20 @@ void InverseKinematics() {
       float kp_x, kp_y, Kp, Ki;
       float omega;
 
-      if (state == FORWARD || state == BACKWARD) {
+      if (prevState == HOMING) {
         kp_x = 0.25;
         kp_y = 0.0;
-        Kp = 0.1;
+        Kp = 0.03;
+        Ki = 0.001;   // start small
+      } else if (state == FORWARD || state == BACKWARD) {
+        kp_x = 0.25;
+        kp_y = 0.25;
+        Kp = 0.03;
         Ki = 0.001;   // start small
       } else if (state == RIGHT || state == LEFT) {
-        kp_x = 0.0;
-        kp_y = 0.3;
-        Kp = 0.1;   // optional small heading correction while strafing
+        kp_x = 0.25;
+        kp_y = 0.25;
+        Kp = 0.03;   // optional small heading correction while strafing
         Ki = 0;  // start very small
       } else {
         kp_x = 0;
@@ -409,9 +414,9 @@ void InverseKinematics() {
       omega = Kp * w_error + Ki * w_error_integral;
 
       if (vx > 0) {
-        vx = constrain(vx, 0, 7);
+        vx = constrain(vx, 0, 4);
       } else if (vx < 0) {
-        vx = constrain(vx, -7, 0);
+        vx = constrain(vx, -4, 0);
       }
 
       if (vy > 0) {
@@ -660,25 +665,21 @@ void rotateThatBi() {
 void readOrientation() {
   if (bno08x.getSensorEvent(&sensorValue)) {
 
-    if (sensorValue.sensorId == SH2_ROTATION_VECTOR) {
+    if (sensorValue.sensorId == SH2_GAME_ROTATION_VECTOR) {
 
-      float qw = sensorValue.un.rotationVector.real;
-      float qx = sensorValue.un.rotationVector.i;
-      float qy = sensorValue.un.rotationVector.j;
-      float qz = sensorValue.un.rotationVector.k;
+      float qw = sensorValue.un.gameRotationVector.real;
+      float qx = sensorValue.un.gameRotationVector.i;
+      float qy = sensorValue.un.gameRotationVector.j;
+      float qz = sensorValue.un.gameRotationVector.k;
 
       // Convert quaternion to yaw (heading)
-      float yaw = atan2(2.0*(qx*qy + qw*qz),
+      float yaw = atan2(2.0 * (qx*qy + qw*qz),
                         qw*qw + qx*qx - qy*qy - qz*qz);
 
       heading = yaw * 180.0 / PI;
 
       if (heading < 0)
         heading += 360;
-
-      //BluetoothSerial.print("Compass Heading: ");
-      //BluetoothSerial.print(heading);
-      //BluetoothSerial.println(" degrees");
     }
   }
 }
@@ -729,10 +730,16 @@ int read_sonar() {
   return distance_cm;
 }
 
-#define kplf 0.9
-#define kplr 0.85
-#define kprf 1.05
-#define kprr 0.95
+// #define kplf 0.9
+// #define kplr 0.85
+// #define kprf 1.05
+// #define kprr 0.95
+
+#define kplf 1
+#define kplr 1
+#define kprf 1
+#define kprr 1
+
 void forward(float a, float b, float c, float d) {
   left_front_motor.writeMicroseconds(1500 + kplf*a);
   left_rear_motor.writeMicroseconds(1500 + kplr*d);
