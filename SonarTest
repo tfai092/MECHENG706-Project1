@@ -1,0 +1,188 @@
+
+
+#include <Servo.h>  //Need for Servo pulse output
+
+//#include <Adafruit_BNO08x.h>  //Need for Gyroscope
+
+//Gyroscope initialisation
+//Adafruit_BNO08x bno08x(-1);
+//sh2_SensorValue_t sensorValue;
+float rad = 0.0;
+
+// #define NO_READ_GYRO  //Uncomment if GYRO is not attached.
+
+#define NO_HC -SR04  //Uncomment if HC-SR04 ultrasonic ranging sensor is not attached.
+
+//#define NO_BATTERY_V_OK //Uncomment if BATTERY_V_OK if you do not care about battery damage.
+
+//Refer to Shield Pinouts.jpg for pin locations
+
+//Default motor control pins
+const byte left_front = 46;
+const byte left_rear = 47;
+const byte right_rear = 50;
+const byte right_front = 51;
+
+
+//Default ultrasonic ranging sensor pins, these pins are defined my the Shield
+const int trigPin = 48;
+const int echoPin = 49;
+
+// Anything over 400 cm (23200 us pulse) is "out of range". Hit:If you decrease to this the ranging sensor but the timeout is short, you may not need to read up to 4meters.
+const unsigned int MAX_DIST = 23200;
+
+Servo left_font_motor;   // create servo object to control Vex Motor Controller 29
+Servo left_rear_motor;   // create servo object to control Vex Motor Controller 29
+Servo right_rear_motor;  // create servo object to control Vex Motor Controller 29
+Servo right_font_motor;  // create servo object to control Vex Motor Controller 29
+Servo turret_motor;
+
+
+int speed_val = 100;
+int speed_change;
+
+//Serial Pointer
+HardwareSerial *SerialCom;
+
+int FRONT_SHORT_IR_SENSOR = A14; //sensor is attached on pinA14
+int FRONT_LONG_IR_SENSOR = A13; //sensor is attached on pinA13
+int REAR_SHORT_IR_SENSOR = A15; //sensor is attached on pinA15
+int REAR_LONG_IR_SENSOR = A12; //sensor is attached on pinA12
+
+byte serialRead = 0; //for control serial communication
+int signalADCshort = 0; // the read out signal in 0-1023 corresponding to 0-5v
+int signalADClong = 0; // the read out signal in 0-1023 corresponding to 0-5v
+
+float distance_short;
+float distance_long;
+float distance_cm;
+
+float distance_reading = 0;
+double duration;
+
+int pos = 0;
+void setup(void) {
+  turret_motor.attach(11);
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  // The Trigger pin will tell the sensor to range find
+  pinMode(trigPin, OUTPUT);
+  digitalWrite(trigPin, LOW);
+
+  // Setup the Serial port and pointer, the pointer allows switching the debug info through the USB port(Serial) or Bluetooth port(Serial1) with ease.
+  SerialCom = &Serial;
+  SerialCom->begin(115200);
+  SerialCom->println("MECHENG706_Base_Code");
+  delay(1000);
+  SerialCom->println("Setup....");
+  enable_motors();
+
+  delay(1000);  //settling time but no really needed
+}
+
+void loop() {
+
+  // put your main code here, to run repeatedly:
+  if (Serial.available()) { // Check for input from terminal
+    
+    serialRead = Serial.read(); // Read input
+
+    if (serialRead==49) { // Check for flag to execute, 49 is ascii for 1, stop serial printing
+      Serial.end(); // end the serial communication to get the sensor data
+    }
+  }
+
+
+    read_sonar();
+    Serial.print("Distance: ");
+    Serial.println(distance_cm);
+
+
+}
+
+int read_sonar() {
+  // Clear trigger
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  // Send 10µs pulse
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Read echo time
+  duration = pulseIn(echoPin, HIGH);
+
+  // Convert time to distance
+  distance_cm = duration * 0.0343 / 2;
+
+  return distance_cm;
+}
+
+void disable_motors() {
+  left_font_motor.detach();   // detach the servo on pin left_front to turn Vex Motor Controller 29 Off
+  left_rear_motor.detach();   // detach the servo on pin left_rear to turn Vex Motor Controller 29 Off
+  right_rear_motor.detach();  // detach the servo on pin right_rear to turn Vex Motor Controller 29 Off
+  right_font_motor.detach();  // detach the servo on pin right_front to turn Vex Motor Controller 29 Off
+
+  pinMode(left_front, INPUT);
+  pinMode(left_rear, INPUT);
+  pinMode(right_rear, INPUT);
+  pinMode(right_front, INPUT);
+}
+
+void enable_motors() {
+  left_font_motor.attach(left_front);    // attaches the servo on pin left_front to turn Vex Motor Controller 29 On
+  left_rear_motor.attach(left_rear);     // attaches the servo on pin left_rear to turn Vex Motor Controller 29 On
+  right_rear_motor.attach(right_rear);   // attaches the servo on pin right_rear to turn Vex Motor Controller 29 On
+  right_font_motor.attach(right_front);  // attaches the servo on pin right_front to turn Vex Motor Controller 29 On
+}
+void stop()  //Stop
+{
+  left_font_motor.writeMicroseconds(1500);
+  left_rear_motor.writeMicroseconds(1500);
+  right_rear_motor.writeMicroseconds(1500);
+  right_font_motor.writeMicroseconds(1500);
+}
+
+void forward() {
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
+}
+
+void reverse() {
+  left_font_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_font_motor.writeMicroseconds(1500 + speed_val);
+}
+
+void ccw() {
+  left_font_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
+}
+
+void cw() {
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_font_motor.writeMicroseconds(1500 + speed_val);
+}
+
+void strafe_left() {
+  left_font_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
+}
+
+void strafe_right() {
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 + speed_val);
+}
