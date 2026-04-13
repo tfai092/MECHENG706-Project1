@@ -268,7 +268,7 @@ void driveBackwardStraight(float target_heading)
 void driveForwardStraight(float target_heading)
 {
 
-  float Kp = 1.2;   // heading correction gain (tune this)
+  float Kp = 1.5;   // heading correction gain (tune this)
   float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
 
   float front_distance_long = 17948 * pow(frontsignalADClong, -1.22);
