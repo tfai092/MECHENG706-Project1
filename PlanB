@@ -200,6 +200,7 @@ void loop() {
 
     case BACKWARD:
     BluetoothSerial.println("NEXT STATE = BACKWARD");
+    driveBackwardStraight(best_heading);
 
       if (prevState == HOMING) {
         state = LEFT;
@@ -233,6 +234,7 @@ void loop() {
 
 void driveBackwardStraight(float target_heading)
 {
+
   float Kp = 1.2;   // heading correction gain (tune this)
   float rearsignalADClong = analogRead(REAR_LONG_IR_SENSOR);
 
@@ -252,22 +254,20 @@ void driveBackwardStraight(float target_heading)
     }
     // correction term
     float correction = Kp * error;
-    correction = constrain(correction, -300, 300);
+    correction = constrain(correction, -150, 150);
 
-    int left_cmd  = 1600 - correction;
-    int right_cmd = 1600 + correction;
-
-    left_cmd  = constrain(left_cmd, 1300, 1700);
-    right_cmd = constrain(right_cmd, 1300, 1700);
+    int left_cmd  = 200 + correction;
+    int right_cmd = 200 - correction;
 
     // SIMPLE FORWARD DRIVE (no IK)
-    DriveBackward(left_cmd, right_cmd, left_cmd, right_cmd);
+    DriveBackward(right_cmd, left_cmd);
   }
   stop();
 }
 
 void driveForwardStraight(float target_heading)
 {
+
   float Kp = 1.2;   // heading correction gain (tune this)
   float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
 
@@ -287,16 +287,13 @@ void driveForwardStraight(float target_heading)
     }
     // correction term
     float correction = Kp * error;
-    correction = constrain(correction, -300, 300);
+    correction = constrain(correction, -150, 150);
 
-    int left_cmd  = 1600 - correction;
-    int right_cmd = 1600 + correction;
-
-    left_cmd  = constrain(left_cmd, 1300, 1700);
-    right_cmd = constrain(right_cmd, 1300, 1700);
+    int left_cmd  = 200 + correction;
+    int right_cmd = 200 - correction;
 
     // SIMPLE FORWARD DRIVE (no IK)
-    Driveforward(left_cmd, right_cmd, left_cmd, right_cmd);
+    Driveforward(right_cmd, left_cmd);
   }
   stop();
 }
@@ -674,18 +671,25 @@ int read_sonar() {
 #define kprf 1
 #define kprr 1
 
-void Driveforward(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 + a);
-  left_rear_motor.writeMicroseconds(1500 + d);
-  right_rear_motor.writeMicroseconds(1500 + c);
-  right_front_motor.writeMicroseconds(1500 + b);
+void Driveforward(float right_cmd, float left_cmd) {
+  left_front_motor.writeMicroseconds(1500 + left_cmd);
+  left_rear_motor.writeMicroseconds(1500 + left_cmd);
+  right_rear_motor.writeMicroseconds(1500 - right_cmd);
+  right_front_motor.writeMicroseconds(1500 - right_cmd);
 }
 
-void DriveBackward(float a, float b, float c, float d) {
-  left_front_motor.writeMicroseconds(1500 - a);
-  left_rear_motor.writeMicroseconds(1500 - d);
-  right_rear_motor.writeMicroseconds(1500 - c);
-  right_front_motor.writeMicroseconds(1500 - b);
+void DriveBackward(float right_cmd, float left_cmd) {
+  left_front_motor.writeMicroseconds(1500 - left_cmd);
+  left_rear_motor.writeMicroseconds(1500 - left_cmd);
+  right_rear_motor.writeMicroseconds(1500 + right_cmd);
+  right_front_motor.writeMicroseconds(1500 + right_cmd);
+}
+
+void forwardBase(int speed) {
+  left_front_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_front_motor.writeMicroseconds(1500 - speed_val);
 }
 
 void forward(float a, float b, float c, float d) {
