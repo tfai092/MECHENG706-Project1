@@ -480,14 +480,14 @@ void InverseKinematics() {
       theta3 = (-1.0 / Rw) * (vx - vy + (L + l) * omega);  // back left
       theta4 = (1.0 / Rw) * (vx + vy - (L + l) * omega);   // back right
 
-      BluetoothSerial.print("THETA1: ");
-      BluetoothSerial.print(theta1);
-      BluetoothSerial.print("  theta2: ");
-      BluetoothSerial.print(theta2);
-      BluetoothSerial.print("  theta3: ");
-      BluetoothSerial.print(theta3);
-      BluetoothSerial.print("  theta4: ");
-      BluetoothSerial.println(theta4);
+      // BluetoothSerial.print("THETA1: ");
+      // BluetoothSerial.print(theta1);
+      // BluetoothSerial.print("  theta2: ");
+      // BluetoothSerial.print(theta2);
+      // BluetoothSerial.print("  theta3: ");
+      // BluetoothSerial.print(theta3);
+      // BluetoothSerial.print("  theta4: ");
+      // BluetoothSerial.println(theta4);
 
       if (state == FORWARD) {
         forward(theta1, theta2, theta3, theta4);
