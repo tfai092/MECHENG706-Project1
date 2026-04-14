@@ -1,0 +1,785 @@
+#include <Servo.h>  //Need for Servo pulse output
+#include <Adafruit_BNO08x.h>  //Need for Gyroscope
+#include <SoftwareSerial.h>
+#include <math.h>
+#include <Wire.h>
+
+//Gyroscope initialisation
+Adafruit_BNO08x bno08x(-1);
+
+sh2_SensorValue_t sensorValue;
+
+//Default motor control pins
+const byte left_front = 50;
+const byte left_rear = 51;
+const byte right_rear = 46;
+const byte right_front = 47;
+
+// For Ultrasonic sensor
+const int trigPin = 48;
+const int echoPin = 49;
+float distance_cm;
+long duration;
+
+float wall_heading = 0.0;     // real heading where shortest sonar distance was found
+
+// Declare robot width (cm)
+float robot_width = 25;
+
+// For Homing
+float effort;
+float heading;
+
+float angle_referece;
+// Serial Data input pin
+#define BLUETOOTH_RX 19
+// Serial Data output pin
+#define BLUETOOTH_TX 18
+
+SoftwareSerial BluetoothSerial(BLUETOOTH_RX, BLUETOOTH_TX);
+
+Servo left_front_motor;   // create servo object to control Vex Motor Controller 29
+Servo left_rear_motor;   // create servo object to control Vex Motor Controller 29
+Servo right_rear_motor;  // create servo object to control Vex Motor Controller 29
+Servo right_front_motor;  // create servo object to control Vex Motor Controller 29
+Servo turret_motor;
+
+//Serial Pointer
+HardwareSerial *SerialCom;
+
+int FRONT_SHORT_IR_SENSOR = A15; //sensor is attached on pinA14
+int FRONT_LONG_IR_SENSOR = A12; //sensor is attached on pinA13
+int REAR_SHORT_IR_SENSOR = A14; //sensor is attached on pinA15
+int REAR_LONG_IR_SENSOR = A13; //sensor is attached on pinA12
+
+byte serialRead = 0; //for control serial communication
+int signalADCshort = 0; // the read out signal in 0-1023 corresponding to 0-5v
+int signalADClong = 0; // the read out signal in 0-1023 corresponding to 0-5v
+
+float distance_short;
+float distance_long;
+
+float distance_reading = 0;
+
+float prev_distance = 0;
+float current_distance;
+float dt =0;
+unsigned long prev_time = 0;
+float vx, distance_y, vy;
+float prev_y = 0;
+float theta1, theta2, theta3, theta4;
+float Rw = 0.025;
+float L = 0.15;
+float l = 0.09;
+float distance_from_wall = 10;
+float w_error_integral = 0.0;
+unsigned long prev_control_time = 0;
+float heading_offset = 0.0;
+
+bool MAP_ORIENTATION;
+
+#define MAP_LENGTH 200
+#define MAP_WIDTH 120
+#define ROBOT_WIDTH 20
+#define ROBOT_LENGTH 25
+
+float cross_map_dimension = MAP_ORIENTATION ? MAP_WIDTH : MAP_LENGTH;
+
+#define LANE_SPACING 15
+#define MAP_EDGE_MARGIN 5
+
+enum State {
+    HOMING,
+    FORWARD,
+    RIGHT,
+    BACKWARD,
+    LEFT,
+    STOP
+  };
+
+State state;
+State prevState;
+
+void setup(void) {
+  state = HOMING;
+  prevState = HOMING;
+
+  BluetoothSerial.println("SETUP RAN");
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  digitalWrite(trigPin, LOW);
+
+  turret_motor.attach(11);
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  // Setup Gyro
+  if (!bno08x.begin_I2C()) {
+    Serial.println("BNO08x not detected");
+    while (1);
+  }
+
+  // Enable rotation vector reporting AFTER successful initialization
+  bno08x.enableReport(SH2_GAME_ROTATION_VECTOR);
+
+  // Setup the Serial port and pointer, the pointer allows switching the debug info through the USB port(Serial) or Bluetooth port(Serial1) with ease.
+  Serial.begin(115200);
+  BluetoothSerial.begin(115200);
+  enable_motors();
+}
+
+void loop() {
+  _delay_ms(500);
+  if (Serial.available()) { // Check for input from terminal
+    
+    serialRead = Serial.read(); // Read input
+
+    if (serialRead == 49) { // Check for flag to execute, 49 is ascii for 1, stop serial printing
+      Serial.end(); // end the serial communication to get the sensor data
+    }
+  }
+  
+  switch(state) {
+    case HOMING:
+      homing();
+      MapOrientation();
+      prevState = HOMING;
+      break;
+
+    case FORWARD:
+      InverseKinematics(); 
+      if (prevState == HOMING) {
+        state = LEFT;
+      } else {
+        state = RIGHT;
+      }
+      prevState = FORWARD;
+      delay(50);
+      break;
+
+    case RIGHT:
+      // Check if another lane shift would exceed the map width/length
+      if (mapCompleteAfterNextRightShift()) {
+        BluetoothSerial.println("MAP COMPLETE -> STOP");
+        state = STOP;
+        break;
+      }
+      distance_from_wall += LANE_SPACING;
+      InverseKinematics();
+
+      if (prevState == FORWARD) {
+        state = BACKWARD;
+      } else {
+        state = FORWARD;
+      }
+
+      prevState = RIGHT;
+      break;
+
+    case BACKWARD:
+      InverseKinematics();
+      if (prevState == HOMING) {
+        state = LEFT;
+      } else  {
+        state = RIGHT;
+      }
+      prevState = BACKWARD;
+      break;
+    
+    case LEFT:
+      InverseKinematics();
+      if (prevState == FORWARD) {
+        state = BACKWARD;
+      } else {
+        state = FORWARD;
+      }
+      prevState = LEFT;
+      break;
+
+    case STOP:
+      stop();
+      disable_motors();
+      prevState = STOP;
+      break;
+  }
+}
+
+void MapOrientation () {
+  float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
+  float rearsignalADClong  = analogRead(REAR_LONG_IR_SENSOR);
+
+  float front_distance_long = 17948.0 * pow(frontsignalADClong, -1.22);
+  float rear_distance_long  = 17948.0 * pow(rearsignalADClong, -1.22);
+
+  if (front_distance_long + rear_distance_long + ROBOT_LENGTH < MAP_LENGTH - 20) {
+    MAP_ORIENTATION = true;
+  } else {
+    MAP_ORIENTATION = false;
+  }
+}
+
+bool mapCompleteAfterNextRightShift() {
+  float cross_map_dimension = MAP_ORIENTATION ? MAP_WIDTH : MAP_LENGTH;
+
+  // Predict where the robot centreline would be after the next lane shift
+  float next_distance_from_wall = distance_from_wall + LANE_SPACING;
+
+  // Stop when the robot would no longer fit inside the map
+  if (next_distance_from_wall + (ROBOT_WIDTH / 2.0) >= cross_map_dimension - MAP_EDGE_MARGIN) {
+    return true;
+  }
+  return false;
+}
+
+void homing() {
+  rotateThatBi();
+
+  // Fine alignment using the two short IR sensors on the same side
+  wall_heading = refineStraightWithSideIR(wall_heading);
+
+  // If you are using zero-heading functionality:
+  zeroHeading();
+  wall_heading = 0.0;
+
+  float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
+  float rearsignalADClong  = analogRead(REAR_LONG_IR_SENSOR);
+
+  float front_distance_long = 17948 * pow(frontsignalADClong, -1.22);
+  float rear_distance_long  = 17948 * pow(rearsignalADClong, -1.22);
+
+  prevState = HOMING;
+
+  if (front_distance_long <= rear_distance_long) {
+    state = FORWARD;
+    BluetoothSerial.println("NEXT STATE = FORWARD");
+  } else {
+    state = BACKWARD;
+    BluetoothSerial.println("NEXT STATE = BACKWARD");
+  }
+}
+
+void InverseKinematics() {
+  float target_heading = wall_heading;
+  float w_error, x_error, y_error, overall_error;
+  distance_y = read_sonar_median();
+
+  if (state == BACKWARD) {
+    signalADClong  = analogRead(REAR_LONG_IR_SENSOR);
+  } else {
+    signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
+  }
+
+  // Convert IR readings to distance
+  distance_long  = 17948.0 * pow(signalADClong, -1.22);
+
+  current_distance = distance_long;
+
+  readOrientation();
+  x_error = current_distance - 8.0;
+  y_error = distance_y - distance_from_wall;
+  w_error = angleDiff(target_heading, heading);
+
+  if (state == FORWARD || state == BACKWARD) {
+    overall_error = x_error;
+  } else if (state == RIGHT || state == LEFT) {
+    overall_error = y_error;
+  } else if (state == HOMING) {
+    overall_error = w_error;
+  }
+
+  // Reset integral when entering the function
+  w_error_integral = 0.0;
+  prev_control_time = millis();
+
+  while (abs(overall_error) > 5) {
+    unsigned long now = millis();
+    if (now - prev_time >= 20) {  
+      prev_time = now;
+
+      // time step for integral
+      float dt_sec = (now - prev_control_time) / 1000.0;
+      prev_control_time = now;
+
+      readOrientation();
+      distance_y = read_sonar_median();
+
+      if (state == FORWARD || prevState == FORWARD) {
+        signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
+        signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
+      } else if (state == BACKWARD || prevState == BACKWARD) {
+        signalADCshort = analogRead(REAR_SHORT_IR_SENSOR);
+        signalADClong  = analogRead(REAR_LONG_IR_SENSOR);
+      }
+
+      // Convert IR readings to distance
+      distance_long  = 17948.0 * pow(signalADClong, -1.22);
+      distance_short = 12.10 / (signalADCshort * (5.0 / 1024.0)) - 0.42;
+      current_distance = distance_long;
+
+      if (state == FORWARD) {
+        x_error = current_distance - 8.0;
+        y_error = distance_y - distance_from_wall;
+        w_error = angleDiff(target_heading, heading);
+      } else if (state == BACKWARD) {
+        x_error = 10.0 - current_distance;
+        y_error = distance_y - distance_from_wall;
+        w_error = angleDiff(target_heading, heading);
+      } else if (state == RIGHT) {
+        if (prevState == FORWARD) {
+          x_error = current_distance - 8.0;
+          y_error = distance_y - distance_from_wall;
+          w_error = angleDiff(target_heading, heading);
+        } else {
+          x_error = 10.0 - current_distance;
+          y_error = distance_y - distance_from_wall;
+          w_error = angleDiff(target_heading, heading);
+        }
+      } else if (state == LEFT) {
+        if (prevState == FORWARD) {
+          x_error = current_distance - 8.0;
+          y_error = distance_y - distance_from_wall;
+          w_error = angleDiff(target_heading, heading);
+        } else {
+          x_error = 10.0 - current_distance;
+          y_error = distance_y - distance_from_wall;
+          w_error = angleDiff(target_heading, heading);
+        }
+      }
+
+      float kp_x, kp_y, Kp, Ki;
+      float omega;
+
+      if (prevState == HOMING) {
+        kp_x = 0.26;
+        kp_y = 0;
+        Kp = 0.26;
+        Ki = 0.005;
+      } else {
+        kp_x = 0.26;
+        kp_y = 0.35;
+        Kp = 0.4;
+        Ki = 0.005;
+      }
+
+      // Integral on heading error
+      if (abs(w_error) < 20.0) {
+        w_error_integral += w_error * dt_sec;
+      }
+
+      // anti-windup clamp
+      w_error_integral = constrain(w_error_integral, -6.0, 6.0);
+
+      vy = constrain(kp_y * y_error, -6, 6);
+      vx = constrain(kp_x * x_error, -6, 6);
+      omega = constrain(Kp * w_error + Ki * w_error_integral, -6, 6);
+
+      theta1 = (1.0 / Rw) * (vx - vy - ((L + l) * omega));   // front left
+      theta2 = (1.0 / Rw) * (vx + vy + ((L + l) * omega));  // front right
+      theta3 = (1.0 / Rw) * (vx - vy + ((L + l) * omega));  // back right
+      theta4 = (1.0 / Rw) * (vx + vy - ((L + l) * omega));   // back left
+
+      if (state == FORWARD || state == BACKWARD) {
+        overall_error = x_error;
+      } else if (state == RIGHT || state == LEFT) {
+        overall_error = y_error;
+      }  else if (state == HOMING) {
+        overall_error = w_error;
+      }
+      drive(theta1, theta2, theta3, theta4);
+    }
+  }
+  delay(500);
+}
+
+float readShortIRcm(int pin) {
+  float adc = analogRead(pin);
+  float dist;
+
+  if (pin == FRONT_SHORT_IR_SENSOR) {
+    // Front sensor: ADC = 18188*(1/d) + 61.966
+    if (adc <= 62.0) adc = 62.0;
+    dist = 18188.0 / (adc - 61.966);
+  } 
+  else if (pin == REAR_SHORT_IR_SENSOR) {
+    // Rear sensor: ADC = 16510*(1/d) + 75.957
+    if (adc <= 76.0) adc = 76.0;
+    dist = 16510.0 / (adc - 75.957);
+  } 
+  else {
+    return 200.0;
+  }
+
+  if (dist < 2.0) dist = 2.0;
+  if (dist > 80.0) dist = 80.0;
+
+  return dist;
+}
+
+float getSideIRAlignmentScore() {
+  float d_front = readShortIRMedian(FRONT_SHORT_IR_SENSOR);
+  float d_rear  = readShortIRMedian(REAR_SHORT_IR_SENSOR);
+
+  float diff = d_front - d_rear;
+
+  BluetoothSerial.print("Front short: ");
+  BluetoothSerial.print(d_front);
+  BluetoothSerial.print("  Rear short: ");
+  BluetoothSerial.print(d_rear);
+  BluetoothSerial.print("  Diff: ");
+  BluetoothSerial.println(diff);
+
+  return diff * diff;   // squared error
+}
+
+float refineStraightWithSideIR(float coarse_heading) {
+  const float window = 8.0;      // scan ±8 deg around coarse heading
+  const float step_deg = 1.0;    // sample every 1 deg
+
+  float best_heading = coarse_heading;
+  float best_score = 1e9;
+
+  // store neighboring points for optional parabolic refinement
+  float prev_h = coarse_heading, prev_s = 1e9;
+  float mid_h  = coarse_heading, mid_s  = 1e9;
+  float next_h = coarse_heading, next_s = 1e9;
+
+  // start at left edge of scan window
+  float start_heading = wrap360(coarse_heading - window);
+  rotateToAngle(start_heading);
+  delay(150);
+
+  float target = start_heading;
+  int sample_index = 0;
+  int best_index = -1;
+
+  while (sample_index <= (int)(2.0 * window / step_deg)) {
+    rotateToAngle(target);
+    delay(80);
+
+    float score = getSideIRAlignmentScore();
+
+    BluetoothSerial.print("Heading: ");
+    BluetoothSerial.print(target);
+    BluetoothSerial.print("  Score: ");
+    BluetoothSerial.println(score);
+
+    if (score < best_score) {
+      best_score = score;
+      best_heading = target;
+      best_index = sample_index;
+    }
+
+    target = wrap360(target + step_deg);
+    sample_index++;
+  }
+
+  // Re-scan 3 points around best heading for a small parabolic refinement
+  prev_h = wrap360(best_heading - step_deg);
+  mid_h  = best_heading;
+  next_h = wrap360(best_heading + step_deg);
+
+  rotateToAngle(prev_h);
+  delay(80);
+  prev_s = getSideIRAlignmentScore();
+
+  rotateToAngle(mid_h);
+  delay(80);
+  mid_s = getSideIRAlignmentScore();
+
+  rotateToAngle(next_h);
+  delay(80);
+  next_s = getSideIRAlignmentScore();
+
+  // Parabolic interpolation using equally spaced points
+  float denom = (prev_s - 2.0 * mid_s + next_s);
+  float refined_heading = mid_h;
+
+  if (abs(denom) > 1e-6) {
+    float offset = 0.5 * (prev_s - next_s) / denom;   // in units of step_deg
+    offset = constrain(offset, -1.0, 1.0);
+    refined_heading = wrap360(mid_h + offset * step_deg);
+  }
+
+  BluetoothSerial.print("Best coarse heading: ");
+  BluetoothSerial.println(best_heading);
+  BluetoothSerial.print("Refined heading: ");
+  BluetoothSerial.println(refined_heading);
+
+  rotateToAngle(refined_heading);
+  delay(150);
+
+  return refined_heading;
+}
+
+float wrap360(float angle) {
+  while (angle >= 360.0) angle -= 360.0;
+  while (angle < 0.0) angle += 360.0;
+  return angle;
+}
+
+float angleDiff(float target, float current) {
+  float diff = target - current;
+  while (diff > 180.0) diff -= 360.0;
+  while (diff < -180.0) diff += 360.0;
+  return diff;
+}
+
+float absAngleStep(float new_heading, float old_heading) {
+  float step = angleDiff(new_heading, old_heading);
+  return abs(step);
+}
+
+void rotateStop() {
+  stop();
+}
+
+void rotateToAngle(float target_heading) {
+  target_heading = wrap360(target_heading);
+
+  readOrientation();
+  float error = angleDiff(target_heading, heading);
+
+  while (abs(error) > 1.0) {
+    readOrientation();
+    error = angleDiff(target_heading, heading);
+
+    float turnSpeed = (int)(3.5 * abs(error));
+    turnSpeed = constrain(turnSpeed, 70, 180);
+
+    if (error > 0) {
+      rotateCCWRaw(turnSpeed);
+    } else {
+      rotateCWRaw(turnSpeed);
+    }
+    delay(15);
+  }
+
+  stop();
+  delay(120);
+
+  // Fine correction pass in case of overshoot/coast
+  readOrientation();
+  error = angleDiff(target_heading, heading);
+
+  while (abs(error) > 1) {
+    readOrientation();
+    error = angleDiff(target_heading, heading);
+
+    float turnSpeed = 65;   // gentle trim speed
+
+    BluetoothSerial.print("  error: ");
+    BluetoothSerial.println(error);
+
+    if (error > 0) {
+      rotateCCWRaw(turnSpeed);
+    } else {
+      rotateCWRaw(turnSpeed);
+    }
+
+    delay(10);
+    stop();
+    delay(25);
+  }
+  stop();
+}
+
+
+void rotateThatBi() {
+  readOrientation();
+  float prev_heading = heading;
+  float swept_angle = 0.0;
+
+  float min_distance = 9999.0;
+  float best_heading = heading;
+
+  const float scanSpeed = 110;
+  const float min_update_margin = 0.5;
+
+  while (swept_angle < 360.0) {
+    rotateCCWRaw(scanSpeed);
+    delay(10);
+
+    readOrientation();
+
+    float sonar_distance = 0.0;
+    int valid_reads = 0;
+
+    for (int i = 0; i < 3; i++) {
+      float d = read_sonar();
+      if (d > 0) {
+        sonar_distance += d;
+        valid_reads++;
+      }
+      delay(5);
+    }
+
+    if (valid_reads > 0) {
+      sonar_distance /= valid_reads;
+    } else {
+      sonar_distance = 9999.0;
+    }
+
+    float step = absAngleStep(heading, prev_heading);
+    swept_angle += step;
+    prev_heading = heading;
+
+    if (sonar_distance < (min_distance - min_update_margin)) {
+      min_distance = sonar_distance;
+      best_heading = heading;
+    }
+  }
+
+  stop();
+  delay(200);
+
+  rotateToAngle(best_heading);
+  wall_heading = best_heading;
+}
+
+void zeroHeading() {
+  readOrientationRaw();
+  heading_offset = heading;
+}
+
+void readOrientationRaw() {
+  if (bno08x.getSensorEvent(&sensorValue)) {
+
+    if (sensorValue.sensorId == SH2_GAME_ROTATION_VECTOR) {
+
+      float qw = sensorValue.un.gameRotationVector.real;
+      float qx = sensorValue.un.gameRotationVector.i;
+      float qy = sensorValue.un.gameRotationVector.j;
+      float qz = sensorValue.un.gameRotationVector.k;
+
+      float yaw = atan2(2.0 * (qx*qy + qw*qz),
+                        qw*qw + qx*qx - qy*qy - qz*qz);
+
+      heading = yaw * 180.0 / PI;
+
+      if (heading < 0)
+        heading += 360.0;
+    }
+  }
+}
+
+void readOrientation() {
+  readOrientationRaw();
+  heading = wrap360(heading - heading_offset);
+}
+
+void disable_motors() {
+  left_front_motor.detach();   // detach the servo on pin left_front to turn Vex Motor Controller 29 Off
+  left_rear_motor.detach();   // detach the servo on pin left_rear to turn Vex Motor Controller 29 Off
+  right_rear_motor.detach();  // detach the servo on pin right_rear to turn Vex Motor Controller 29 Off
+  right_front_motor.detach();  // detach the servo on pin right_front to turn Vex Motor Controller 29 Off
+
+  pinMode(left_front, INPUT);
+  pinMode(left_rear, INPUT);
+  pinMode(right_rear, INPUT);
+  pinMode(right_front, INPUT);
+}
+
+void enable_motors() {
+  left_front_motor.attach(left_front);    // attaches the servo on pin left_front to turn Vex Motor Controller 29 On
+  left_rear_motor.attach(left_rear);     // attaches the servo on pin left_rear to turn Vex Motor Controller 29 On
+  right_rear_motor.attach(right_rear);   // attaches the servo on pin right_rear to turn Vex Motor Controller 29 On
+  right_front_motor.attach(right_front);  // attaches the servo on pin right_front to turn Vex Motor Controller 29 On
+}
+
+void stop()
+{
+  left_front_motor.writeMicroseconds(1500);
+  left_rear_motor.writeMicroseconds(1500);
+  right_rear_motor.writeMicroseconds(1500);
+  right_front_motor.writeMicroseconds(1500);
+}
+
+float read_sonar() {
+  // Clear trigger
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  // Send 10µs pulse
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Read echo time
+
+  duration = pulseIn(echoPin, HIGH);
+
+  // Convert time to distance
+  distance_cm = duration * 0.0343 / 2.0;
+
+  return distance_cm;
+}
+
+void drive(float t1, float t2, float t3, float t4) {
+  left_front_motor.writeMicroseconds(1500 + t1);
+  right_front_motor.writeMicroseconds(1500 - t2);
+  right_rear_motor.writeMicroseconds(1500 - t3);
+  left_rear_motor.writeMicroseconds(1500 + t4);
+}
+
+float read_sonar_median() { 
+  const int N = 5;   // must be odd
+  float readings[N];
+
+  // Collect readings
+  for (int i = 0; i < N; i++) {
+    readings[i] = read_sonar();
+    delay(3);  // small gap between readings
+  }
+
+  // Simple bubble sort (small N so fine)
+  for (int i = 0; i < N - 1; i++) {
+    for (int j = i + 1; j < N; j++) {
+      if (readings[j] < readings[i]) {
+        float temp = readings[i];
+        readings[i] = readings[j];
+        readings[j] = temp;
+      }
+    }
+  }
+
+  // Return median
+  return readings[N / 2];
+}
+
+float readShortIRMedian(int pin) {
+  const int N = 5;
+  float vals[N];
+
+  for (int i = 0; i < N; i++) {
+    vals[i] = readShortIRcm(pin);
+    delay(4);
+  }
+
+  for (int i = 0; i < N - 1; i++) {
+    for (int j = i + 1; j < N; j++) {
+      if (vals[j] < vals[i]) {
+        float tmp = vals[i];
+        vals[i] = vals[j];
+        vals[j] = tmp;
+      }
+    }
+  }
+
+  return vals[N / 2];
+}
+
+#define kp_rotation 1.4
+void rotateCCWRaw(float speed_cmd) {
+  // tune sign if robot turns wrong way
+  left_front_motor.writeMicroseconds(1500 - kp_rotation * speed_cmd);
+  left_rear_motor.writeMicroseconds(1500 - kp_rotation * speed_cmd);
+  right_rear_motor.writeMicroseconds(1500 - kp_rotation * speed_cmd);
+  right_front_motor.writeMicroseconds(1500 - kp_rotation * speed_cmd);
+}
+
+void rotateCWRaw(float speed_cmd) {
+  // tune sign if robot turns wrong way
+  left_front_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
+  left_rear_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
+  right_rear_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
+  right_front_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
+}
