@@ -71,10 +71,14 @@ float theta1, theta2, theta3, theta4;
 float Rw = 0.025;
 float L = 0.15;
 float l = 0.09;
-float distance_from_wall = 10;
+float distance_from_wall = 15;
 float w_error_integral = 0.0;
+float x_error_integral = 0.0;
+float y_error_integral = 0.0;
 unsigned long prev_control_time = 0;
 float heading_offset = 0.0;
+float filtered_heading = 0.0;
+bool heading_filter_initialized = false;
 
 bool MAP_ORIENTATION;
 
@@ -250,10 +254,8 @@ void homing() {
 
   if (front_distance_long <= rear_distance_long) {
     state = FORWARD;
-    BluetoothSerial.println("NEXT STATE = FORWARD");
   } else {
     state = BACKWARD;
-    BluetoothSerial.println("NEXT STATE = BACKWARD");
   }
 }
 
@@ -288,6 +290,8 @@ void InverseKinematics() {
 
   // Reset integral when entering the function
   w_error_integral = 0.0;
+  x_error_integral = 0.0;
+  y_error_integral = 0.0;
   prev_control_time = millis();
 
   while (abs(overall_error) > 5) {
@@ -345,19 +349,23 @@ void InverseKinematics() {
         }
       }
 
-      float kp_x, kp_y, Kp, Ki;
+      float kp_x, kp_y, kp_w, ki_x, ki_y, ki_w;
       float omega;
 
       if (prevState == HOMING) {
         kp_x = 0.26;
         kp_y = 0;
-        Kp = 0.26;
-        Ki = 0.005;
+        kp_w = 0.26;
+        ki_x = 0;
+        ki_y = 0;
+        ki_w = 0;
       } else {
         kp_x = 0.26;
         kp_y = 0.35;
-        Kp = 0.4;
-        Ki = 0.005;
+        kp_w = 0.4;
+        ki_x = 0;
+        ki_y = 0;
+        ki_w = 0;
       }
 
       // Integral on heading error
@@ -365,20 +373,35 @@ void InverseKinematics() {
         w_error_integral += w_error * dt_sec;
       }
 
+      if (abs(x_error) < 20.0) {
+        x_error_integral += x_error * dt_sec;
+      }
+
+      if (abs(y_error) < 20.0) {
+        y_error_integral += y_error * dt_sec;
+      }
+
       // anti-windup clamp
       w_error_integral = constrain(w_error_integral, -6.0, 6.0);
+      // anti-windup clamp
+      x_error_integral = constrain(x_error_integral, -6.0, 6.0);
+      // anti-windup clamp
+      y_error_integral = constrain(y_error_integral, -6.0, 6.0);
+      
 
-      vy = constrain(kp_y * y_error, -6, 6);
-      vx = constrain(kp_x * x_error, -6, 6);
-      omega = constrain(Kp * w_error + Ki * w_error_integral, -6, 6);
+      vx = constrain(kp_x * x_error + ki_x * x_error_integral, -6, 6);
+      vy = constrain(kp_y * y_error + ki_y * y_error_integral, -6, 6);
+      omega = constrain(kp_w * w_error + ki_w * w_error_integral, -6, 6);
 
       theta1 = (1.0 / Rw) * (vx - vy - ((L + l) * omega));   // front left
       theta2 = (1.0 / Rw) * (vx + vy + ((L + l) * omega));  // front right
       theta3 = (1.0 / Rw) * (vx - vy + ((L + l) * omega));  // back right
       theta4 = (1.0 / Rw) * (vx + vy - ((L + l) * omega));   // back left
 
+      BluetoothSerial.println(theta1);
+
       if (state == FORWARD || state == BACKWARD) {
-        overall_error = x_error;
+        overall_error = x_error;                                                                                                                                                              
       } else if (state == RIGHT || state == LEFT) {
         overall_error = y_error;
       }  else if (state == HOMING) {
@@ -388,6 +411,19 @@ void InverseKinematics() {
     }
   }
   delay(500);
+}
+
+float median3(float a, float b, float c) {
+  if (a > b) { float t = a; a = b; b = t; }
+  if (b > c) { float t = b; b = c; c = t; }
+  if (a > b) { float t = a; a = b; b = t; }
+  return b;
+}
+
+float unwrapToReference(float angle, float reference) {
+  while (angle - reference > 180.0) angle -= 360.0;
+  while (angle - reference < -180.0) angle += 360.0;
+  return angle;
 }
 
 float readShortIRcm(int pin) {
@@ -542,8 +578,8 @@ void rotateToAngle(float target_heading) {
     readOrientation();
     error = angleDiff(target_heading, heading);
 
-    float turnSpeed = (int)(3.5 * abs(error));
-    turnSpeed = constrain(turnSpeed, 70, 180);
+    float turnSpeed = (int)(3.2 * abs(error));
+    turnSpeed = constrain(turnSpeed, 60, 150);
 
     if (error > 0) {
       rotateCCWRaw(turnSpeed);
@@ -564,7 +600,7 @@ void rotateToAngle(float target_heading) {
     readOrientation();
     error = angleDiff(target_heading, heading);
 
-    float turnSpeed = 65;   // gentle trim speed
+    float turnSpeed = 55;   // gentle trim speed
 
     BluetoothSerial.print("  error: ");
     BluetoothSerial.println(error);
@@ -638,6 +674,8 @@ void rotateThatBi() {
 void zeroHeading() {
   readOrientationRaw();
   heading_offset = heading;
+  filtered_heading = 0.0;
+  heading_filter_initialized = false;
 }
 
 void readOrientationRaw() {
@@ -662,8 +700,31 @@ void readOrientationRaw() {
 }
 
 void readOrientation() {
+  float s1, s2, s3;
+
   readOrientationRaw();
-  heading = wrap360(heading - heading_offset);
+  s1 = wrap360(heading - heading_offset);
+  delay(2);
+
+  readOrientationRaw();
+  s2 = wrap360(heading - heading_offset);
+  delay(2);
+
+  readOrientationRaw();
+  s3 = wrap360(heading - heading_offset);
+
+  if (!heading_filter_initialized) {
+    heading = median3(s1, s2, s3);
+  } else {
+    s1 = unwrapToReference(s1, filtered_heading);
+    s2 = unwrapToReference(s2, filtered_heading);
+    s3 = unwrapToReference(s3, filtered_heading);
+
+    heading = wrap360(median3(s1, s2, s3));
+  }
+
+  filtered_heading = heading;
+  heading_filter_initialized = true;
 }
 
 void disable_motors() {
