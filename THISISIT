@@ -428,29 +428,45 @@ float unwrapToReference(float angle, float reference) {
 
 float readShortIRcm(int pin) {
   float adc = analogRead(pin);
-  float dist;
+  float dist_mm;
 
   if (pin == FRONT_SHORT_IR_SENSOR) {
-    // Front sensor: ADC = 18188*(1/d) + 61.966
-    if (adc <= 62.0) adc = 62.0;
-    dist = 18188.0 / (adc - 61.966);
+    float denom = adc - 61.966;
+    if (denom <= 1.0) {
+      BluetoothSerial.println("Front IR out of range");
+      return 80.0;
+    }
+    dist_mm = 18188.0 / denom;
   } 
   else if (pin == REAR_SHORT_IR_SENSOR) {
-    // Rear sensor: ADC = 16510*(1/d) + 75.957
-    if (adc <= 76.0) adc = 76.0;
-    dist = 16510.0 / (adc - 75.957);
+    float denom = adc - 75.957;
+    if (denom <= 1.0) {
+      BluetoothSerial.println("Rear IR out of range");
+      return 80.0;
+    }
+    dist_mm = 16510.0 / denom;
   } 
   else {
-    return 200.0;
+    return 80.0;
   }
 
-  if (dist < 2.0) dist = 2.0;
-  if (dist > 80.0) dist = 80.0;
+  float dist_cm = dist_mm / 10.0;
 
-  return dist;
+  if (dist_cm < 2.0) dist_cm = 2.0;
+  if (dist_cm > 80.0) dist_cm = 80.0;
+
+  return dist_cm;
 }
 
 float getSideIRAlignmentScore() {
+  int adc_front = analogRead(FRONT_SHORT_IR_SENSOR);
+  int adc_rear  = analogRead(REAR_SHORT_IR_SENSOR);
+
+  BluetoothSerial.print("ADC front: ");
+  BluetoothSerial.print(adc_front);
+  BluetoothSerial.print("  ADC rear: ");
+  BluetoothSerial.println(adc_rear);
+
   float d_front = readShortIRMedian(FRONT_SHORT_IR_SENSOR);
   float d_rear  = readShortIRMedian(REAR_SHORT_IR_SENSOR);
 
@@ -463,7 +479,7 @@ float getSideIRAlignmentScore() {
   BluetoothSerial.print("  Diff: ");
   BluetoothSerial.println(diff);
 
-  return diff * diff;   // squared error
+  return diff * diff;
 }
 
 float refineStraightWithSideIR(float coarse_heading) {
