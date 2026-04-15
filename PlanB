@@ -226,7 +226,7 @@ void loop() {
 void driveBackwardStraight(float target_heading)
 {
 
-  float Kp = 0.8;   // heading correction gain (tune this)
+  float Kp = 2.5;   // heading correction gain (tune this)
   float rearsignalADClong = analogRead(REAR_LONG_IR_SENSOR);
 
   float rear_distance_long = 17948 * pow(rearsignalADClong, -1.22);
@@ -259,7 +259,7 @@ void driveBackwardStraight(float target_heading)
 void driveForwardStraight(float target_heading)
 {
 
-  float Kp = 0.8;   // heading correction gain (tune this)
+  float Kp = 2.5;   // heading correction gain (tune this)
   float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
 
   float front_distance_long = 17948 * pow(frontsignalADClong, -1.22);
@@ -272,10 +272,6 @@ void driveForwardStraight(float target_heading)
     readOrientation();
     float error = angleDiff(target_heading, heading);
 
-    // deadband to prevent jitter
-    if (abs(error) < 1.5) {
-      error = 0;
-    }
     // correction term
     float correction = Kp * error;
     correction = constrain(correction, -150, 150);
@@ -286,7 +282,7 @@ void driveForwardStraight(float target_heading)
     // SIMPLE FORWARD DRIVE (no IK)
     Driveforward(right_cmd, left_cmd);
   }
-  stop();
+  Driveforward(0 ,0);
 }
 
 void MapOrientation () {
