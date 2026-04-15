@@ -22,6 +22,7 @@ float distance_cm;
 long duration;
 
 float wall_heading = 0.0;     // real heading where shortest sonar distance was found
+float best_heading;
 
 // Declare robot width (cm)
 float robot_width = 25;
@@ -762,6 +763,20 @@ void readOrientation() {
 
   filtered_heading = heading;
   heading_filter_initialized = true;
+}
+
+void Driveforward(float right_cmd, float left_cmd) {
+  left_front_motor.writeMicroseconds(1500 + left_cmd);
+  left_rear_motor.writeMicroseconds(1500 + left_cmd);
+  right_rear_motor.writeMicroseconds(1500 - right_cmd);
+  right_front_motor.writeMicroseconds(1500 - right_cmd);
+}
+
+void DriveBackward(float right_cmd, float left_cmd) {
+  left_front_motor.writeMicroseconds(1500 - left_cmd);
+  left_rear_motor.writeMicroseconds(1500 - left_cmd);
+  right_rear_motor.writeMicroseconds(1500 + right_cmd);
+  right_front_motor.writeMicroseconds(1500 + right_cmd);
 }
 
 void disable_motors() {
