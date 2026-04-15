@@ -74,6 +74,13 @@ float distance_from_wall = 15;
 float w_error_integral = 0.0;
 float x_error_integral = 0.0;
 float y_error_integral = 0.0;
+float w_error_prev = 0.0;
+float x_error_prev = 0.0;
+float y_error_prev = 0.0;
+
+float w_error_derivative = 0.0;
+float x_error_derivative = 0.0;
+float y_error_derivative = 0.0;
 unsigned long prev_control_time = 0;
 float heading_offset = 0.0;
 float filtered_heading = 0.0;
@@ -81,14 +88,14 @@ bool heading_filter_initialized = false;
 
 bool MAP_ORIENTATION;
 
-#define MAP_LENGTH 200
-#define MAP_WIDTH 120
+#define MAP_LENGTH 100
+#define MAP_WIDTH 100
 #define ROBOT_WIDTH 20
 #define ROBOT_LENGTH 25
 
 float cross_map_dimension = MAP_ORIENTATION ? MAP_WIDTH : MAP_LENGTH;
 
-#define LANE_SPACING 10
+#define LANE_SPACING 15
 #define MAP_EDGE_MARGIN 5
 
 enum State {
@@ -104,7 +111,7 @@ State state;
 State prevState;
 
 void setup(void) {
-  state = FORWARD;
+  state = HOMING;
   prevState = HOMING;
 
   BluetoothSerial.println("SETUP RAN");
@@ -149,7 +156,6 @@ void loop() {
       break;
 
     case FORWARD:
-      zeroHeading();
       InverseKinematics(); 
       if (prevState == HOMING) {
         state = LEFT;
@@ -192,6 +198,8 @@ void loop() {
     case LEFT:
       InverseKinematics();
       realignWithSideIR();
+      zeroHeading();     // reset corrected heading as new home
+      wall_heading = 0.0;
       if (prevState == FORWARD) {
         state = BACKWARD;
       } else {
@@ -238,11 +246,7 @@ bool mapCompleteAfterNextRightShift() {
 void homing() {
   rotateThatBi();
 
-  // If you are using zero-heading functionality:
-  zeroHeading();
-  wall_heading = 0.0;
-  
-  realignWithSideIR();
+  realignWithSideIR();   // let this do the final zeroHeading()
 
   float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
   float rearsignalADClong  = analogRead(REAR_LONG_IR_SENSOR);
@@ -292,9 +296,18 @@ void InverseKinematics() {
   w_error_integral = 0.0;
   x_error_integral = 0.0;
   y_error_integral = 0.0;
+
+  w_error_prev = w_error;
+  x_error_prev = x_error;
+  y_error_prev = y_error;
+
+  w_error_derivative = 0.0;
+  x_error_derivative = 0.0;
+  y_error_derivative = 0.0;
+
   prev_control_time = millis();
 
-  while (abs(overall_error) > 1) {
+  while (abs(overall_error) > 2.0) {
     unsigned long now = millis();
     if (now - prev_time >= 20) {  
       prev_time = now;
@@ -349,35 +362,6 @@ void InverseKinematics() {
         }
       }
 
-      float kp_x, kp_y, kp_w, ki_x, ki_y, ki_w;
-      float omega;
-
-      if (prevState == HOMING) {
-        kp_x = 0.35;
-        kp_y = 0;
-        kp_w = 0.22;
-        ki_x = 0.005;
-        ki_y = 0;
-        ki_w = 0;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral, -6, 6);
-      } else if (state == FORWARD) {
-        kp_x = 0.4;
-        kp_y = 0.4;
-        kp_w = 0.17;
-        ki_x = 0.08;
-        ki_y = 0.05;
-        ki_w = 0.05;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral, -4, 4);
-      } else { // BACKWARD IS GUD
-        kp_x = 0.35;
-        kp_y = 0.4;
-        kp_w = 0.17;
-        ki_x = 0;
-        ki_y = 0.02;
-        ki_w = 0;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral, -6, 6);
-      }
-
       // Integral on heading error
       if (abs(w_error) < 20.0) {
         w_error_integral += w_error * dt_sec;
@@ -391,17 +375,89 @@ void InverseKinematics() {
         y_error_integral += y_error * dt_sec;
       }
 
-      // anti-windup clamp
+      if (dt_sec > 0.0) {
+        x_error_derivative = (x_error - x_error_prev) / dt_sec;
+        y_error_derivative = (y_error - y_error_prev) / dt_sec;
+        w_error_derivative = (w_error - w_error_prev) / dt_sec;
+      } else {
+        x_error_derivative = 0.0;
+        y_error_derivative = 0.0;
+        w_error_derivative = 0.0;
+      }
+
+    // Optional clamp to stop derivative spikes
+    x_error_derivative = constrain(x_error_derivative, -50.0, 50.0);
+    y_error_derivative = constrain(y_error_derivative, -50.0, 50.0);
+    w_error_derivative = constrain(w_error_derivative, -100.0, 100.0);
+
+    // Store for next loop
+    x_error_prev = x_error;
+    y_error_prev = y_error;
+    w_error_prev = w_error;
+
+    // anti-windup clamp
       w_error_integral = constrain(w_error_integral, -3.0, 3.0);
       // anti-windup clamp
       x_error_integral = constrain(x_error_integral, -3.0, 3.0);
       // anti-windup clamp
       y_error_integral = constrain(y_error_integral, -3.0, 3.0);
-      
 
-      
-      vy = constrain(kp_y * y_error + ki_y * y_error_integral, -6, 6);
-      omega = constrain(kp_w * w_error + ki_w * w_error_integral, -4, 4);
+      float kp_x, kp_y, kp_w, ki_x, ki_y, ki_w, kd_x, kd_y, kd_w;
+      float omega;
+
+      if (prevState == HOMING) {
+        kp_x = 0.35;
+        kp_y = 0;
+        kp_w = 0.4;
+        ki_x = 0.1;
+        ki_y = 0;
+        ki_w = 0;
+        kd_x = 0;
+        kd_y = 0;
+        kd_w = 0;
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -6, 6);
+        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -4, 4);
+        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -8, 8);
+      } else if (state == FORWARD) {
+        kp_x = 0.4;
+        kp_y = 0.8;
+        kp_w = 1.3;
+        ki_x = 0.08;
+        ki_y = 0.08;
+        ki_w = 0.08;
+        kd_x = 0.04;
+        kd_y = 0.05;
+        kd_w = 0.06;
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -4, 4);
+        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
+        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -8, 8);
+      } else if (state == BACKWARD) { // BACKWARD IS GUD
+        kp_x = 0.35;
+        kp_y = 0.6;
+        kp_w = 0.8;
+        ki_x = 0;
+        ki_y = 0.02;
+        ki_w = 0;
+        kd_x = 0.03;
+        kd_y = 0.04;
+        kd_w = 0.05;
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -4, 4);
+        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
+        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -8, 8);
+      } else {
+        kp_x = 0;
+        kp_y = 0.5;
+        kp_w = 0.5;
+        ki_x = 0.12;
+        ki_y = 0.12;
+        ki_w = 0;
+        kd_x = 0;
+        kd_y = 0.04;
+        kd_w = 0.05;
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -7, 7);
+        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -5, 5);
+      omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -9, 9);
+      }
 
       theta1 = (1.0 / Rw) * (vx - vy - ((L + l) * omega));   // front left
       theta2 = (1.0 / Rw) * (vx + vy + ((L + l) * omega));  // front right
@@ -478,9 +534,9 @@ void realignWithSideIR() {
 
     if (abs(diff) <= tolerance) {
       stop();
-      delay(150);
+      delay(250);
 
-      zeroHeading();     // reset corrected heading as new home
+      zeroHeading();
       wall_heading = 0.0;
 
       BluetoothSerial.println("IR realignment complete, heading reset");
