@@ -226,12 +226,12 @@ void loop() {
 void driveBackwardStraight(float target_heading)
 {
 
-  float Kp = 1.5;   // heading correction gain (tune this)
+  float Kp = 2.0;   // heading correction gain (tune this)
   float rearADClong = analogRead(REAR_LONG_IR_SENSOR);
 
   float rear_distance = 17948 * pow(rearADClong, -1.22);
 
-  while (rear_distance > 15) {
+  while (rear_distance > 25) {
     
     rearADClong = analogRead(REAR_LONG_IR_SENSOR);
     rear_distance = 17948 * pow(rearADClong, -1.22);
@@ -263,7 +263,7 @@ void driveForwardStraight(float target_heading)
 
   float front_distance = 17948 * pow(frontADClong, -1.22);
 
-  while (front_distance > 15) {
+  while (front_distance > 23) {
 
     float frontADClong = analogRead(FRONT_LONG_IR_SENSOR);
     float front_distance = 17948 * pow(frontADClong, -1.22);
