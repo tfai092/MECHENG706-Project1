@@ -258,7 +258,7 @@ void driveBackwardStraight(float target_heading)
 void driveForwardStraight(float target_heading)
 {
 
-  float Kp = 1.5;   // heading correction gain (tune this)
+  float Kp = 2.0;   // heading correction gain (tune this)
   float frontADClong = analogRead(FRONT_LONG_IR_SENSOR);
 
   float front_distance = 17948 * pow(frontADClong, -1.22);
@@ -283,6 +283,7 @@ void driveForwardStraight(float target_heading)
     // SIMPLE FORWARD DRIVE (no IK)
     Driveforward(right_cmd, left_cmd);
     delay(10);
+    BluetoothSerial.println(front_distance);
   }
   stop();
 }
