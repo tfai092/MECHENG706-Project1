@@ -227,14 +227,14 @@ void driveBackwardStraight(float target_heading)
 {
 
   float Kp = 1.5;   // heading correction gain (tune this)
-  float rearsignalADClong = analogRead(REAR_LONG_IR_SENSOR);
+  float rearADClong = analogRead(REAR_LONG_IR_SENSOR);
 
-  float rear_distance_long = 17948 * pow(rearsignalADClong, -1.22);
+  float rear_distance = 17948 * pow(rearADClong, -1.22);
 
-  while (rear_distance_long > 15) {
+  while (rear_distance > 15) {
     
-    rearsignalADClong = analogRead(REAR_LONG_IR_SENSOR);
-    rear_distance_long = 17948 * pow(rearsignalADClong, -1.22);
+    rearADClong = analogRead(REAR_LONG_IR_SENSOR);
+    rear_distance = 17948 * pow(rearADClong, -1.22);
 
     readOrientation();
     float error = angleDiff(best_heading, heading);
@@ -259,14 +259,14 @@ void driveForwardStraight(float target_heading)
 {
 
   float Kp = 1.5;   // heading correction gain (tune this)
-  float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
+  float frontADClong = analogRead(FRONT_LONG_IR_SENSOR);
 
-  float front_distance_long = 17948 * pow(frontsignalADClong, -1.22);
+  float front_distance = 17948 * pow(frontADClong, -1.22);
 
-  while (front_distance_long > 15) {
+  while (front_distance > 15) {
 
-    float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
-    float front_distance_long = 17948 * pow(frontsignalADClong, -1.22);
+    float frontADClong = analogRead(FRONT_LONG_IR_SENSOR);
+    float front_distance = 17948 * pow(frontADClong, -1.22);
 
     readOrientation();
     float error = angleDiff(target_heading, heading);
