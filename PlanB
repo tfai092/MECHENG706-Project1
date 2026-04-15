@@ -243,8 +243,10 @@ void driveBackwardStraight(float target_heading)
     float correction = Kp * error;
     correction = constrain(correction, -150, 150);
 
+    float motordif = 1.1;
+
     int left_cmd  = 200 + correction;
-    int right_cmd = 200 - correction;
+    int right_cmd = motordif*(200 - correction);
 
     // SIMPLE FORWARD DRIVE (no IK)
     DriveBackward(right_cmd, left_cmd);
@@ -273,8 +275,10 @@ void driveForwardStraight(float target_heading)
     float correction = Kp * error;
     correction = constrain(correction, -150, 150);
 
+    float motordif = 1.1;
+
     int left_cmd  = 200 - correction;
-    int right_cmd = 200 + correction;
+    int right_cmd = motordif*(200 + correction);
 
     // SIMPLE FORWARD DRIVE (no IK)
     Driveforward(right_cmd, left_cmd);
