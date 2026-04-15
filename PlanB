@@ -165,6 +165,7 @@ void loop() {
 
     case RIGHT:
   BluetoothSerial.println("NEXT STATE = RIGHT");
+  moveRight();
 
   // Only evaluate once when entering RIGHT
   if (prevState != RIGHT) {
@@ -203,6 +204,7 @@ void loop() {
     
     case LEFT:
     BluetoothSerial.println("NEXT STATE = LEFT");
+    moveLeft();
 
       // BluetoothSerial.println("WE ARE AT HOME");
       
