@@ -195,6 +195,7 @@ void loop() {
       break;
     
     case LEFT:
+      realignWithSideIR();
       InverseKinematics();
       realignWithSideIR();
       if (prevState == FORWARD) {
@@ -259,7 +260,6 @@ void homing() {
 }
 
 void InverseKinematics() {
-  float target_heading = wall_heading;
   float w_error, x_error, y_error, overall_error;
   distance_y = read_sonar_median();
 
@@ -277,7 +277,7 @@ void InverseKinematics() {
   readOrientation();
   x_error = current_distance - 8.0;
   y_error = distance_y - distance_from_wall;
-  w_error = angleDiff(target_heading, heading);
+  w_error = angleDiff(wall_heading, heading);
 
   if (state == FORWARD || state == BACKWARD) {
     overall_error = x_error;
@@ -330,30 +330,30 @@ void InverseKinematics() {
       if (state == FORWARD) {
         x_error = current_distance - 8.0;
         y_error = distance_y - distance_from_wall;
-        w_error = angleDiff(target_heading, heading);
+        w_error = angleDiff(wall_heading, heading);
       } else if (state == BACKWARD) {
         x_error = 10.0 - current_distance;
         y_error = distance_y - distance_from_wall;
-        w_error = angleDiff(target_heading, heading);
+        w_error = angleDiff(wall_heading, heading);
       } else if (state == RIGHT) {
         if (prevState == FORWARD) {
           x_error = current_distance - 8.0;
           y_error = distance_y - distance_from_wall;
-          w_error = angleDiff(target_heading, heading);
+          w_error = angleDiff(wall_heading, heading);
         } else {
           x_error = 10.0 - current_distance;
           y_error = distance_y - distance_from_wall;
-          w_error = angleDiff(target_heading, heading);
+          w_error = angleDiff(wall_heading, heading);
         }
       } else if (state == LEFT) {
         if (prevState == FORWARD) {
           x_error = current_distance - 8.0;
           y_error = distance_y - distance_from_wall;
-          w_error = angleDiff(target_heading, heading);
+          w_error = angleDiff(wall_heading, heading);
         } else {
           x_error = 10.0 - current_distance;
           y_error = distance_y - distance_from_wall;
-          w_error = angleDiff(target_heading, heading);
+          w_error = angleDiff(wall_heading, heading);
         }
       }
 
@@ -572,15 +572,15 @@ void rotateStop() {
   stop();
 }
 
-void rotateToAngle(float target_heading) {
-  target_heading = wrap360(target_heading);
+void rotateToAngle(float wall_heading) {
+  wall_heading = wrap360(wall_heading);
 
   readOrientation();
-  float error = angleDiff(target_heading, heading);
+  float error = angleDiff(wall_heading, heading);
 
   while (abs(error) > 1.0) {
     readOrientation();
-    error = angleDiff(target_heading, heading);
+    error = angleDiff(wall_heading, heading);
 
     float turnSpeed = (int)(3.2 * abs(error));
     turnSpeed = constrain(turnSpeed, 60, 150);
@@ -598,11 +598,11 @@ void rotateToAngle(float target_heading) {
 
   // Fine correction pass in case of overshoot/coast
   readOrientation();
-  error = angleDiff(target_heading, heading);
+  error = angleDiff(wall_heading, heading);
 
   while (abs(error) > 1) {
     readOrientation();
-    error = angleDiff(target_heading, heading);
+    error = angleDiff(wall_heading, heading);
 
     float turnSpeed = 55;   // gentle trim speed
 
