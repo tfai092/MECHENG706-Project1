@@ -280,8 +280,8 @@ void driveForwardStraight(float target_heading)
     float correction = Kp * error;
     correction = constrain(correction, -150, 150);
 
-    int left_cmd  = 200 + correction;
-    int right_cmd = 200 - correction;
+    int left_cmd  = 200 - correction;
+    int right_cmd = 200 + correction;
 
     // SIMPLE FORWARD DRIVE (no IK)
     Driveforward(right_cmd, left_cmd);
