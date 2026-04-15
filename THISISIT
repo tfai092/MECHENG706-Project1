@@ -30,7 +30,6 @@ float robot_width = 25;
 float effort;
 float heading;
 
-float angle_referece;
 // Serial Data input pin
 #define BLUETOOTH_RX 19
 // Serial Data output pin
@@ -89,7 +88,7 @@ bool MAP_ORIENTATION;
 
 float cross_map_dimension = MAP_ORIENTATION ? MAP_WIDTH : MAP_LENGTH;
 
-#define LANE_SPACING 15
+#define LANE_SPACING 10
 #define MAP_EDGE_MARGIN 5
 
 enum State {
@@ -105,7 +104,7 @@ State state;
 State prevState;
 
 void setup(void) {
-  state = HOMING;
+  state = FORWARD;
   prevState = HOMING;
 
   BluetoothSerial.println("SETUP RAN");
@@ -150,6 +149,7 @@ void loop() {
       break;
 
     case FORWARD:
+      zeroHeading();
       InverseKinematics(); 
       if (prevState == HOMING) {
         state = LEFT;
@@ -186,11 +186,12 @@ void loop() {
       } else  {
         state = RIGHT;
       }
-      prevState = BACKWARD;
+      prevState = BACKWARD; 
       break;
     
     case LEFT:
       InverseKinematics();
+      realignWithSideIR();
       if (prevState == FORWARD) {
         state = BACKWARD;
       } else {
@@ -237,12 +238,11 @@ bool mapCompleteAfterNextRightShift() {
 void homing() {
   rotateThatBi();
 
-  // Fine alignment using the two short IR sensors on the same side
-  wall_heading = refineStraightWithSideIR(wall_heading);
-
   // If you are using zero-heading functionality:
   zeroHeading();
   wall_heading = 0.0;
+  
+  realignWithSideIR();
 
   float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
   float rearsignalADClong  = analogRead(REAR_LONG_IR_SENSOR);
@@ -294,7 +294,7 @@ void InverseKinematics() {
   y_error_integral = 0.0;
   prev_control_time = millis();
 
-  while (abs(overall_error) > 5) {
+  while (abs(overall_error) > 1) {
     unsigned long now = millis();
     if (now - prev_time >= 20) {  
       prev_time = now;
@@ -353,19 +353,29 @@ void InverseKinematics() {
       float omega;
 
       if (prevState == HOMING) {
-        kp_x = 0.26;
+        kp_x = 0.35;
         kp_y = 0;
-        kp_w = 0.26;
-        ki_x = 0;
+        kp_w = 0.22;
+        ki_x = 0.005;
         ki_y = 0;
         ki_w = 0;
-      } else {
-        kp_x = 0.26;
-        kp_y = 0.35;
-        kp_w = 0.4;
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral, -6, 6);
+      } else if (state == FORWARD) {
+        kp_x = 0.4;
+        kp_y = 0.4;
+        kp_w = 0.17;
+        ki_x = 0.08;
+        ki_y = 0.05;
+        ki_w = 0.05;
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral, -4, 4);
+      } else { // BACKWARD IS GUD
+        kp_x = 0.35;
+        kp_y = 0.4;
+        kp_w = 0.17;
         ki_x = 0;
-        ki_y = 0;
+        ki_y = 0.02;
         ki_w = 0;
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral, -6, 6);
       }
 
       // Integral on heading error
@@ -382,16 +392,16 @@ void InverseKinematics() {
       }
 
       // anti-windup clamp
-      w_error_integral = constrain(w_error_integral, -6.0, 6.0);
+      w_error_integral = constrain(w_error_integral, -3.0, 3.0);
       // anti-windup clamp
-      x_error_integral = constrain(x_error_integral, -6.0, 6.0);
+      x_error_integral = constrain(x_error_integral, -3.0, 3.0);
       // anti-windup clamp
-      y_error_integral = constrain(y_error_integral, -6.0, 6.0);
+      y_error_integral = constrain(y_error_integral, -3.0, 3.0);
       
 
-      vx = constrain(kp_x * x_error + ki_x * x_error_integral, -6, 6);
+      
       vy = constrain(kp_y * y_error + ki_y * y_error_integral, -6, 6);
-      omega = constrain(kp_w * w_error + ki_w * w_error_integral, -6, 6);
+      omega = constrain(kp_w * w_error + ki_w * w_error_integral, -4, 4);
 
       theta1 = (1.0 / Rw) * (vx - vy - ((L + l) * omega));   // front left
       theta2 = (1.0 / Rw) * (vx + vy + ((L + l) * omega));  // front right
@@ -428,29 +438,17 @@ float unwrapToReference(float angle, float reference) {
 
 float readShortIRcm(int pin) {
   float adc = analogRead(pin);
-  float dist_mm;
+  float dist_cm;
 
   if (pin == FRONT_SHORT_IR_SENSOR) {
-    float denom = adc - 61.966;
-    if (denom <= 1.0) {
-      BluetoothSerial.println("Front IR out of range");
-      return 80.0;
-    }
-    dist_mm = 18188.0 / denom;
+    dist_cm = 8.86 / (adc * (5.0 / 1024.0)) - 1.96;
   } 
   else if (pin == REAR_SHORT_IR_SENSOR) {
-    float denom = adc - 75.957;
-    if (denom <= 1.0) {
-      BluetoothSerial.println("Rear IR out of range");
-      return 80.0;
-    }
-    dist_mm = 16510.0 / denom;
+    dist_cm = 8.19 / (adc * (5.0 / 1024.0)) - 1.48;
   } 
   else {
     return 80.0;
   }
-
-  float dist_cm = dist_mm / 10.0;
 
   if (dist_cm < 2.0) dist_cm = 2.0;
   if (dist_cm > 80.0) dist_cm = 80.0;
@@ -458,108 +456,51 @@ float readShortIRcm(int pin) {
   return dist_cm;
 }
 
-float getSideIRAlignmentScore() {
-  int adc_front = analogRead(FRONT_SHORT_IR_SENSOR);
-  int adc_rear  = analogRead(REAR_SHORT_IR_SENSOR);
+void realignWithSideIR() {
+  const float tolerance = 0.3;      // cm difference allowed
+  const float turnSpeed = 75;       // trim speed
+  const unsigned long timeout_ms = 4000;
 
-  BluetoothSerial.print("ADC front: ");
-  BluetoothSerial.print(adc_front);
-  BluetoothSerial.print("  ADC rear: ");
-  BluetoothSerial.println(adc_rear);
+  unsigned long t0 = millis();
 
-  float d_front = readShortIRMedian(FRONT_SHORT_IR_SENSOR);
-  float d_rear  = readShortIRMedian(REAR_SHORT_IR_SENSOR);
+  while (millis() - t0 < timeout_ms) {
+    float d_front = readShortIRMedian(FRONT_SHORT_IR_SENSOR);
+    float d_rear  = readShortIRMedian(REAR_SHORT_IR_SENSOR);
 
-  float diff = d_front - d_rear;
+    float diff = d_front - d_rear;
 
-  BluetoothSerial.print("Front short: ");
-  BluetoothSerial.print(d_front);
-  BluetoothSerial.print("  Rear short: ");
-  BluetoothSerial.print(d_rear);
-  BluetoothSerial.print("  Diff: ");
-  BluetoothSerial.println(diff);
+    BluetoothSerial.print("Front short: ");
+    BluetoothSerial.print(d_front);
+    BluetoothSerial.print("  Rear short: ");
+    BluetoothSerial.print(d_rear);
+    BluetoothSerial.print("  Diff: ");
+    BluetoothSerial.println(diff);
 
-  return diff * diff;
-}
+    if (abs(diff) <= tolerance) {
+      stop();
+      delay(150);
 
-float refineStraightWithSideIR(float coarse_heading) {
-  const float window = 8.0;      // scan ±8 deg around coarse heading
-  const float step_deg = 1.0;    // sample every 1 deg
+      zeroHeading();     // reset corrected heading as new home
+      wall_heading = 0.0;
 
-  float best_heading = coarse_heading;
-  float best_score = 1e9;
-
-  // store neighboring points for optional parabolic refinement
-  float prev_h = coarse_heading, prev_s = 1e9;
-  float mid_h  = coarse_heading, mid_s  = 1e9;
-  float next_h = coarse_heading, next_s = 1e9;
-
-  // start at left edge of scan window
-  float start_heading = wrap360(coarse_heading - window);
-  rotateToAngle(start_heading);
-  delay(150);
-
-  float target = start_heading;
-  int sample_index = 0;
-  int best_index = -1;
-
-  while (sample_index <= (int)(2.0 * window / step_deg)) {
-    rotateToAngle(target);
-    delay(80);
-
-    float score = getSideIRAlignmentScore();
-
-    BluetoothSerial.print("Heading: ");
-    BluetoothSerial.print(target);
-    BluetoothSerial.print("  Score: ");
-    BluetoothSerial.println(score);
-
-    if (score < best_score) {
-      best_score = score;
-      best_heading = target;
-      best_index = sample_index;
+      BluetoothSerial.println("IR realignment complete, heading reset");
+      return;
     }
 
-    target = wrap360(target + step_deg);
-    sample_index++;
+    // Swap these directions if it turns the wrong way
+    if (diff > 0) {
+      rotateCCWRaw(turnSpeed);
+    } else {
+      rotateCWRaw(turnSpeed);
+    }
+
+    delay(40);
+    stop();
+    delay(30);
   }
 
-  // Re-scan 3 points around best heading for a small parabolic refinement
-  prev_h = wrap360(best_heading - step_deg);
-  mid_h  = best_heading;
-  next_h = wrap360(best_heading + step_deg);
-
-  rotateToAngle(prev_h);
-  delay(80);
-  prev_s = getSideIRAlignmentScore();
-
-  rotateToAngle(mid_h);
-  delay(80);
-  mid_s = getSideIRAlignmentScore();
-
-  rotateToAngle(next_h);
-  delay(80);
-  next_s = getSideIRAlignmentScore();
-
-  // Parabolic interpolation using equally spaced points
-  float denom = (prev_s - 2.0 * mid_s + next_s);
-  float refined_heading = mid_h;
-
-  if (abs(denom) > 1e-6) {
-    float offset = 0.5 * (prev_s - next_s) / denom;   // in units of step_deg
-    offset = constrain(offset, -1.0, 1.0);
-    refined_heading = wrap360(mid_h + offset * step_deg);
-  }
-
-  BluetoothSerial.print("Best coarse heading: ");
-  BluetoothSerial.println(best_heading);
-  BluetoothSerial.print("Refined heading: ");
-  BluetoothSerial.println(refined_heading);
-
-  rotateToAngle(refined_heading);
-  delay(150);
-
-  return refined_heading;
+  stop();
+  BluetoothSerial.println("IR realignment timeout");
 }
 
 float wrap360(float angle) {
@@ -798,7 +739,7 @@ void drive(float t1, float t2, float t3, float t4) {
 }
 
 float read_sonar_median() { 
-  const int N = 5;   // must be odd
+  const int N = 3;   // must be odd
   float readings[N];
 
   // Collect readings
