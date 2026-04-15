@@ -229,6 +229,8 @@ void moveRight() {
   float initial_distance = read_sonar_median();
   float distance = read_sonar_median();
 
+  BluetoothSerial.println("GOING RIGHT");
+
 
   while (distance < initial_distance + 15) {
     
@@ -343,7 +345,6 @@ void driveForwardStraight(float target_heading)
     // SIMPLE FORWARD DRIVE (no IK)
     Driveforward(right_cmd, left_cmd);
     delay(10);
-    BluetoothSerial.println(front_distance);
   }
   stop();
 }
