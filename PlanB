@@ -223,6 +223,66 @@ void loop() {
   }
 }
 
+void moveRight() {
+
+  float Kp = 2.0;   // heading correction gain (tune this)
+  float initial_distance = read_sonar_median();
+  float distance = read_sonar_median();
+
+
+  while (distance < initial_distance + 15) {
+    
+    float distance = read_sonar_median();
+
+    readOrientation();
+    float error = angleDiff(best_heading, heading);
+
+    // correction term
+    float correction = Kp * error;
+    correction = constrain(correction, -150, 150);
+
+    float motordif = 1.1;
+
+    int left_cmd  = 200 + correction;
+    int right_cmd = motordif*(200 - correction);
+
+    // SIMPLE FORWARD DRIVE (no IK)
+    DriveRight(right_cmd, left_cmd);
+    delay(10);
+  }
+  stop();
+}
+
+void moveLeft() {
+
+  float Kp = 2.0;   // heading correction gain (tune this)
+  float initial_distance = read_sonar_median();
+  float distance = read_sonar_median();
+
+
+  while (distance < initial_distance + 15) {
+    
+    float distance = read_sonar_median();
+
+    readOrientation();
+    float error = angleDiff(best_heading, heading);
+
+    // correction term
+    float correction = Kp * error;
+    correction = constrain(correction, -150, 150);
+
+    float motordif = 1.1;
+
+    int left_cmd  = 200 + correction;
+    int right_cmd = motordif*(200 - correction);
+
+    // SIMPLE FORWARD DRIVE (no IK)
+    DriveLeft(right_cmd, left_cmd);
+    delay(10);
+  }
+  stop();
+}
+
 void driveBackwardStraight(float target_heading)
 {
 
@@ -606,6 +666,34 @@ void DriveBackward(float right_cmd, float left_cmd) {
   left_rear_motor.writeMicroseconds(1500 - left_cmd);
   right_rear_motor.writeMicroseconds(1500 + right_cmd);
   right_front_motor.writeMicroseconds(1500 + right_cmd);
+}
+
+void DriveLeft(float right_cmd, float left_cmd) {
+  left_font_motor.writeMicroseconds(1500 - left_cmd);
+  left_rear_motor.writeMicroseconds(1500 + left_cmd);
+  right_rear_motor.writeMicroseconds(1500 + right_cmd);
+  right_font_motor.writeMicroseconds(1500 - right_cmd);
+}
+
+void DriveRight(float right_cmd, float left_cmd) {
+  left_font_motor.writeMicroseconds(1500 + left_cmd);
+  left_rear_motor.writeMicroseconds(1500 - left_cmd);
+  right_rear_motor.writeMicroseconds(1500 - right_cmd);
+  right_font_motor.writeMicroseconds(1500 + right_cmd);
+}
+
+void strafe_left() {
+  left_font_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
+}
+
+void strafe_right() {
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 + speed_val);
 }
 
 void disable_motors() {
