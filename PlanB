@@ -105,7 +105,7 @@ State state;
 State prevState;
 
 void setup(void) {
-  state = FORWARD;
+  state = HOMING;
   prevState = HOMING;
 
   BluetoothSerial.println("SETUP RAN");
@@ -317,12 +317,6 @@ bool mapCompleteAfterNextRightShift() {
 
 void homing() {
   rotateThatBi();
-
-  // If you are using zero-heading functionality:
-  zeroHeading();
-  wall_heading = 0.0;
-  
-  realignWithSideIR();
 
   float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
   float rearsignalADClong  = analogRead(REAR_LONG_IR_SENSOR);
