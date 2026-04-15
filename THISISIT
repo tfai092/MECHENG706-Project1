@@ -88,8 +88,8 @@ bool heading_filter_initialized = false;
 
 bool MAP_ORIENTATION;
 
-#define MAP_LENGTH 100
-#define MAP_WIDTH 100
+#define MAP_LENGTH 110
+#define MAP_WIDTH 110
 #define ROBOT_WIDTH 20
 #define ROBOT_LENGTH 25
 
@@ -114,7 +114,6 @@ void setup(void) {
   state = HOMING;
   prevState = HOMING;
 
-  BluetoothSerial.println("SETUP RAN");
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
   digitalWrite(trigPin, LOW);
@@ -198,8 +197,6 @@ void loop() {
     case LEFT:
       InverseKinematics();
       realignWithSideIR();
-      zeroHeading();     // reset corrected heading as new home
-      wall_heading = 0.0;
       if (prevState == FORWARD) {
         state = BACKWARD;
       } else {
@@ -245,8 +242,6 @@ bool mapCompleteAfterNextRightShift() {
 
 void homing() {
   rotateThatBi();
-
-  realignWithSideIR();   // let this do the final zeroHeading()
 
   float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
   float rearsignalADClong  = analogRead(REAR_LONG_IR_SENSOR);
@@ -423,11 +418,11 @@ void InverseKinematics() {
         kp_y = 0.8;
         kp_w = 1.3;
         ki_x = 0.08;
-        ki_y = 0.08;
-        ki_w = 0.08;
+        ki_y = 0;
+        ki_w = 0;
         kd_x = 0.04;
         kd_y = 0.05;
-        kd_w = 0.06;
+        kd_w = 0;
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -4, 4);
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -8, 8);
@@ -464,7 +459,10 @@ void InverseKinematics() {
       theta3 = (1.0 / Rw) * (vx - vy + ((L + l) * omega));  // back right
       theta4 = (1.0 / Rw) * (vx + vy - ((L + l) * omega));   // back left
 
-      BluetoothSerial.println(theta1);
+      BluetoothSerial.println(heading);
+      BluetoothSerial.print("     ");
+      BluetoothSerial.println(w_error);
+      BluetoothSerial.print("     ");
 
       if (state == FORWARD || state == BACKWARD) {
         overall_error = x_error;                                                                                                                                                              
@@ -513,8 +511,8 @@ float readShortIRcm(int pin) {
 }
 
 void realignWithSideIR() {
-  const float tolerance = 0.3;      // cm difference allowed
-  const float turnSpeed = 75;       // trim speed
+  const float tolerance = 0.3;      
+  const float turnSpeed = 75;       
   const unsigned long timeout_ms = 4000;
 
   unsigned long t0 = millis();
@@ -525,25 +523,18 @@ void realignWithSideIR() {
 
     float diff = d_front - d_rear;
 
-    BluetoothSerial.print("Front short: ");
-    BluetoothSerial.print(d_front);
-    BluetoothSerial.print("  Rear short: ");
-    BluetoothSerial.print(d_rear);
-    BluetoothSerial.print("  Diff: ");
-    BluetoothSerial.println(diff);
-
     if (abs(diff) <= tolerance) {
       stop();
       delay(250);
 
-      zeroHeading();
-      wall_heading = 0.0;
+      readOrientation();         // get current aligned heading
+      wall_heading = heading;    // THIS is now the “correct” wall-parallel angle
 
-      BluetoothSerial.println("IR realignment complete, heading reset");
+      BluetoothSerial.print("IR aligned. New wall_heading = ");
+      BluetoothSerial.println(wall_heading);
       return;
     }
 
-    // Swap these directions if it turns the wrong way
     if (diff > 0) {
       rotateCCWRaw(turnSpeed);
     } else {
@@ -615,8 +606,8 @@ void rotateToAngle(float target_heading) {
 
     float turnSpeed = 55;   // gentle trim speed
 
-    BluetoothSerial.print("  error: ");
-    BluetoothSerial.println(error);
+    //BluetoothSerial.print("  error: ");
+    //BluetoothSerial.println(error);
 
     if (error > 0) {
       rotateCCWRaw(turnSpeed);
@@ -682,13 +673,6 @@ void rotateThatBi() {
 
   rotateToAngle(best_heading);
   wall_heading = best_heading;
-}
-
-void zeroHeading() {
-  readOrientationRaw();
-  heading_offset = heading;
-  filtered_heading = 0.0;
-  heading_filter_initialized = false;
 }
 
 void readOrientationRaw() {
