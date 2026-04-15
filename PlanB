@@ -105,7 +105,7 @@ State state;
 State prevState;
 
 void setup(void) {
-  state = HOMING;
+  state = FORWARD;
   prevState = HOMING;
 
   BluetoothSerial.println("SETUP RAN");
@@ -325,8 +325,8 @@ void driveForwardStraight(float target_heading)
 
   while (front_distance > 23) {
 
-    float frontADClong = analogRead(FRONT_LONG_IR_SENSOR);
-    float front_distance = 17948 * pow(frontADClong, -1.22);
+    frontADClong = analogRead(FRONT_LONG_IR_SENSOR);
+    front_distance = 17948 * pow(frontADClong, -1.22);
 
     readOrientation();
     float error = angleDiff(target_heading, heading);
