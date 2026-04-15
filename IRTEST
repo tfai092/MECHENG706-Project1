@@ -1,0 +1,57 @@
+#include <Servo.h>  // Need for Servo pulse output
+#include <SoftwareSerial.h>
+// Short IR sensor pins
+const int FRONT_SHORT_IR_SENSOR = A15;
+const int REAR_SHORT_IR_SENSOR  = A14;
+
+// Serial Data input pin
+#define BLUETOOTH_RX 19
+// Serial Data output pin
+#define BLUETOOTH_TX 18
+
+SoftwareSerial BluetoothSerial(BLUETOOTH_RX, BLUETOOTH_TX);
+
+int signalADCshortfront = 0;
+int signalADCshortrear  = 0;
+
+float distance_front = 0;
+float distance_rear  = 0;
+
+void setup(void) {
+  BluetoothSerial.begin(115200);
+  BluetoothSerial.println("SETUP RAN");
+  delay(1000);
+}
+
+void loop() {
+  // Read raw ADC values
+  signalADCshortfront = analogRead(FRONT_SHORT_IR_SENSOR);
+  signalADCshortrear  = analogRead(REAR_SHORT_IR_SENSOR);
+
+  // Convert to distance using simple equations
+  distance_front = 9.0 / (signalADCshortfront * (5.0 / 1024.0)) - 1.0;
+  distance_rear  = 8.2 / (signalADCshortrear  * (5.0 / 1024.0)) - 1.0;
+
+  // Clamp to sensible range
+  if (distance_front < 2.0) distance_front = 2.0;
+  if (distance_front > 80.0) distance_front = 80.0;
+
+  if (distance_rear < 2.0) distance_rear = 2.0;
+  if (distance_rear > 80.0) distance_rear = 80.0;
+
+  // Print values
+  // BluetoothSerial.println("Front ADC: ");
+  // BluetoothSerial.print(signalADCshortfront);
+  BluetoothSerial.print("  Front cm: ");
+  BluetoothSerial.println(distance_front);
+
+  //SerialCom->print("   Rear ADC: ");
+  //SerialCom->print(signalADCshortrear);
+  BluetoothSerial.print("  Rear cm: ");
+  BluetoothSerial.println(distance_rear);
+
+  // SerialCom->print("   Diff: ");
+  // SerialCom->println(distance_front - distance_rear);
+
+  delay(100);
+}
