@@ -669,31 +669,17 @@ void DriveBackward(float right_cmd, float left_cmd) {
 }
 
 void DriveLeft(float right_cmd, float left_cmd) {
-  left_font_motor.writeMicroseconds(1500 - left_cmd);
+  left_front_motor.writeMicroseconds(1500 - left_cmd);
   left_rear_motor.writeMicroseconds(1500 + left_cmd);
   right_rear_motor.writeMicroseconds(1500 + right_cmd);
-  right_font_motor.writeMicroseconds(1500 - right_cmd);
+  right_front_motor.writeMicroseconds(1500 - right_cmd);
 }
 
 void DriveRight(float right_cmd, float left_cmd) {
-  left_font_motor.writeMicroseconds(1500 + left_cmd);
+  left_front_motor.writeMicroseconds(1500 + left_cmd);
   left_rear_motor.writeMicroseconds(1500 - left_cmd);
   right_rear_motor.writeMicroseconds(1500 - right_cmd);
-  right_font_motor.writeMicroseconds(1500 + right_cmd);
-}
-
-void strafe_left() {
-  left_font_motor.writeMicroseconds(1500 - speed_val);
-  left_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_rear_motor.writeMicroseconds(1500 + speed_val);
-  right_font_motor.writeMicroseconds(1500 - speed_val);
-}
-
-void strafe_right() {
-  left_font_motor.writeMicroseconds(1500 + speed_val);
-  left_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_rear_motor.writeMicroseconds(1500 - speed_val);
-  right_font_motor.writeMicroseconds(1500 + speed_val);
+  right_front_motor.writeMicroseconds(1500 + right_cmd);
 }
 
 void disable_motors() {
