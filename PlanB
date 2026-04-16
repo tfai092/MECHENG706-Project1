@@ -105,7 +105,7 @@ State state;
 State prevState;
 
 void setup(void) {
-  state = FORWARD;
+  state = HOMING;
   prevState = HOMING;
 
   BluetoothSerial.println("SETUP RAN");
@@ -151,6 +151,11 @@ void loop() {
       break;
 
     case FORWARD:
+
+      if (prevState == LEFT) {
+        realignWithSideIR();
+      }
+
       zeroHeading();
       driveForwardStraight(best_heading);
 
@@ -236,7 +241,7 @@ void moveRight() {
 
   while (distance < initial_distance + 15) {
     
-    float distance = read_sonar_median();
+    distance = read_sonar_median();
 
     readOrientation();
     float error = angleDiff(best_heading, heading);
@@ -264,9 +269,9 @@ void moveLeft() {
   float distance = read_sonar_median();
 
 
-  while (distance < initial_distance + 15) {
+  while (distance > 15) {
     
-    float distance = read_sonar_median();
+    distance = read_sonar_median();
 
     readOrientation();
     float error = angleDiff(best_heading, heading);
