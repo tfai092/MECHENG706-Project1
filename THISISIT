@@ -87,6 +87,7 @@ float filtered_heading = 0.0;
 bool heading_filter_initialized = false;
 
 bool MAP_ORIENTATION;
+bool final_lap_detected = false;
 
 #define MAP_LENGTH 190
 #define MAP_WIDTH 110
@@ -150,31 +151,33 @@ void loop() {
   switch(state) {
     case HOMING:
       homing();
-      MapOrientation();
       prevState = HOMING;
       break;
 
-    case FORWARD:
-      if (prevState == LEFT) {
-        realignWithSideIR();        
-      }
-      InverseKinematics(); 
+  case FORWARD:
+    if (prevState == LEFT) {
+      realignWithSideIR();        
+    }
+
+    InverseKinematics();   // completes the forward move
+
+    if (final_lap_detected) {
+      BluetoothSerial.println("Final forward complete -> STOP");
+      state = STOP;
+    } else {
       if (prevState == HOMING) {
         state = LEFT;
-      }else {
+      } else {
         state = RIGHT;
       }
-      prevState = FORWARD;
-      delay(50);
-      break;
+    }
+
+    prevState = FORWARD;
+    delay(50);
+    break;
 
     case RIGHT:
-      // Check if another lane shift would exceed the map width/length
-      if (mapCompleteAfterNextRightShift()) {
-        BluetoothSerial.println("MAP COMPLETE -> STOP");
-        state = STOP;
-        break;
-      }
+      
       distance_from_wall += LANE_SPACING;
       InverseKinematics();
 
@@ -191,12 +194,20 @@ void loop() {
       if (prevState == LEFT) {
         realignWithSideIR();        
       }
-      InverseKinematics();
-      if (prevState == HOMING) {
-        state = LEFT;
-      } else  {
-        state = RIGHT;
+
+      InverseKinematics();   // completes the backward move
+
+      if (final_lap_detected) {
+        BluetoothSerial.println("Final backward complete -> STOP");
+        state = STOP;
+      } else {
+        if (prevState == HOMING) {
+          state = LEFT;
+        } else {
+          state = RIGHT;
+        }
       }
+
       prevState = BACKWARD; 
       break;
     
@@ -221,32 +232,6 @@ void loop() {
   }
 }
 
-void MapOrientation () {
-  float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
-  float rearsignalADClong  = analogRead(REAR_LONG_IR_SENSOR);
-
-  float front_distance_long = 17948.0 * pow(frontsignalADClong, -1.22);
-  float rear_distance_long  = 17948.0 * pow(rearsignalADClong, -1.22);
-
-  if (front_distance_long + rear_distance_long + ROBOT_LENGTH < MAP_LENGTH - 20) {
-    MAP_ORIENTATION = true;
-  } else {
-    MAP_ORIENTATION = false;
-  }
-}
-
-bool mapCompleteAfterNextRightShift() {
-  float cross_map_dimension = MAP_ORIENTATION ? MAP_WIDTH : MAP_LENGTH;
-
-  // Predict where the robot centreline would be after the next lane shift
-  float next_distance_from_wall = distance_from_wall + LANE_SPACING;
-
-  // Stop when the robot would no longer fit inside the map
-  if (next_distance_from_wall + (ROBOT_WIDTH / 2.0) >= cross_map_dimension - MAP_EDGE_MARGIN) {
-    return true;
-  }
-  return false;
-}
 
 void homing() {
   rotateThatBi();
@@ -321,6 +306,13 @@ void InverseKinematics() {
       readOrientation();
       distance_y = read_sonar_median();
 
+      if (!final_lap_detected) {
+        if (distance_y > 95.0 && distance_y < 105.0) {
+          final_lap_detected = true;
+          BluetoothSerial.println("Final lap detected");
+        }
+      }
+
       if (state == FORWARD || prevState == FORWARD) {
         signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
         signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
@@ -337,8 +329,6 @@ void InverseKinematics() {
       if (state == FORWARD) {
         x_error = current_distance - 8.0;
         y_error = distance_y - distance_from_wall;
-        BluetoothSerial.print("  wall_heading: ");
-        BluetoothSerial.println(wall_heading);
         w_error = angleDiff(wall_heading, heading);
       } else if (state == BACKWARD) {
         x_error = 10.0 - current_distance;
@@ -433,20 +423,20 @@ void InverseKinematics() {
         kd_y = 0;
         kd_w = 0;
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -4, 4);
-        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
+        vy = final_lap_detected ? 0.0 : constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -8, 8);
       } else if (state == BACKWARD) { // BACKWARD IS GUD
         kp_x = 0.35;
         kp_y = 0.6;
         kp_w = 0.8;
-        ki_x = 0;
-        ki_y = 0.02;
+        ki_x = 0.08;
+        ki_y = 0;
         ki_w = 0;
-        kd_x = 0.03;
-        kd_y = 0.04;
-        kd_w = 0.05;
+        kd_x = 0;
+        kd_y = 0;
+        kd_w = 0;
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -4, 4);
-        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
+        vy = final_lap_detected ? 0.0 : constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -8, 8);
       } else {
         kp_x = 0;
@@ -461,6 +451,11 @@ void InverseKinematics() {
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -7, 7);
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -5, 5);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -9, 9);
+      }
+
+      if (final_lap_detected) {
+        BluetoothSerial.print(" distance_y= ");
+        BluetoothSerial.println(distance_y);
       }
 
       theta1 = (1.0 / Rw) * (vx - vy - ((L + l) * omega));   // front left
@@ -645,6 +640,11 @@ void rotateThatBi() {
   const float min_update_margin = 0.5;
 
   while (swept_angle < 360.0) {
+    float frontsignalADClong = analogRead(FRONT_LONG_IR_SENSOR);
+    float rearsignalADClong = analogRead(REAR_LONG_IR_SENSOR);
+
+    float front_distance_long = 17948 * pow(frontsignalADClong, -1.22);
+    float rear_distance_long = 17948 * pow(rearsignalADClong, -1.22);
     rotateCCWRaw(scanSpeed);
     delay(10);
 
@@ -671,10 +671,11 @@ void rotateThatBi() {
     float step = absAngleStep(heading, prev_heading);
     swept_angle += step;
     prev_heading = heading;
-
     if (sonar_distance < (min_distance - min_update_margin)) {
-      min_distance = sonar_distance;
-      best_heading = heading;
+      if (front_distance_long + rear_distance_long + ROBOT_LENGTH > 170) {
+        min_distance = sonar_distance;
+        best_heading = heading;
+      }
     }
   }
 
@@ -754,8 +755,7 @@ void enable_motors() {
   right_front_motor.attach(right_front);  // attaches the servo on pin right_front to turn Vex Motor Controller 29 On
 }
 
-void stop()
-{
+void stop() {
   left_front_motor.writeMicroseconds(1500);
   left_rear_motor.writeMicroseconds(1500);
   right_rear_motor.writeMicroseconds(1500);
@@ -790,7 +790,7 @@ void drive(float t1, float t2, float t3, float t4) {
 }
 
 float read_sonar_median() { 
-  const int N = 3;   // must be odd
+  const int N = 7;   // must be odd
   float readings[N];
 
   // Collect readings
