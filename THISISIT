@@ -68,7 +68,7 @@ float vx, distance_y, vy;
 float prev_y = 0;
 float theta1, theta2, theta3, theta4;
 float Rw = 0.025;
-float L = 0.15;
+float L = 0.1525;
 float l = 0.09;
 float distance_from_wall = 15;
 float w_error_integral = 0.0;
@@ -89,12 +89,10 @@ bool heading_filter_initialized = false;
 bool MAP_ORIENTATION;
 bool final_lap_detected = false;
 
-#define MAP_LENGTH 190
+#define MAP_LENGTH 200
 #define MAP_WIDTH 110
 #define ROBOT_WIDTH 20
 #define ROBOT_LENGTH 25
-
-float cross_map_dimension = MAP_ORIENTATION ? MAP_WIDTH : MAP_LENGTH;
 
 #define LANE_SPACING 10
 #define MAP_EDGE_MARGIN 5
@@ -138,7 +136,6 @@ void setup(void) {
 }
 
 void loop() {
-  _delay_ms(500);
   if (Serial.available()) { // Check for input from terminal
     
     serialRead = Serial.read(); // Read input
@@ -155,9 +152,9 @@ void loop() {
       break;
 
   case FORWARD:
-    if (prevState == LEFT) {
-      realignWithSideIR();        
-    }
+    // if (prevState == LEFT) {
+    //   realignWithSideIR();        
+    // }
 
     InverseKinematics();   // completes the forward move
 
@@ -173,7 +170,6 @@ void loop() {
     }
 
     prevState = FORWARD;
-    delay(50);
     break;
 
     case RIGHT:
@@ -191,9 +187,9 @@ void loop() {
       break;
 
     case BACKWARD:
-      if (prevState == LEFT) {
-        realignWithSideIR();        
-      }
+      // if (prevState == LEFT) {
+      //   realignWithSideIR();        
+      // }
 
       InverseKinematics();   // completes the backward move
 
@@ -307,7 +303,7 @@ void InverseKinematics() {
       distance_y = read_sonar_median();
 
       if (!final_lap_detected) {
-        if (distance_y > 95.0 && distance_y < 105.0) {
+        if (distance_y > 100 && distance_y < 110.0) {
           final_lap_detected = true;
           BluetoothSerial.println("Final lap detected");
         }
@@ -327,30 +323,30 @@ void InverseKinematics() {
       current_distance = distance_long;
 
       if (state == FORWARD) {
-        x_error = current_distance - 8.0;
+        x_error = current_distance - 6.0;
         y_error = distance_y - distance_from_wall;
         w_error = angleDiff(wall_heading, heading);
       } else if (state == BACKWARD) {
-        x_error = 10.0 - current_distance;
+        x_error = 8.0 - current_distance;
         y_error = distance_y - distance_from_wall;
         w_error = angleDiff(wall_heading, heading);
       } else if (state == RIGHT) {
         if (prevState == FORWARD) {
-          x_error = current_distance - 8.0;
+          x_error = current_distance - 6.0;
           y_error = distance_y - distance_from_wall;
           w_error = angleDiff(wall_heading, heading);
         } else {
-          x_error = 10.0 - current_distance;
+          x_error = 8.0 - current_distance;
           y_error = distance_y - distance_from_wall;
           w_error = angleDiff(wall_heading, heading);
         }
       } else if (state == LEFT) {
         if (prevState == FORWARD) {
-          x_error = current_distance - 8.0;
+          x_error = current_distance - 6.0;
           y_error = distance_y - distance_from_wall;
           w_error = angleDiff(wall_heading, heading);
         } else {
-          x_error = 10.0 - current_distance;
+          x_error = 8.0 - current_distance;
           y_error = distance_y - distance_from_wall;
           w_error = angleDiff(wall_heading, heading);
         }
@@ -400,57 +396,57 @@ void InverseKinematics() {
       float omega;
 
       if (prevState == HOMING) {
-        kp_x = 0.35;
+        kp_x = 0.45;
         kp_y = 0;
-        kp_w = 0.4;
-        ki_x = 0.1;
+        kp_w = 6;
+        ki_x = 0.08;
         ki_y = 0;
         ki_w = 0;
         kd_x = 0;
         kd_y = 0;
         kd_w = 0;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -6, 6);
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -7, 7);
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -4, 4);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -8, 8);
       } else if (state == FORWARD) {
-        kp_x = 0.4;
-        kp_y = 0.8;
-        kp_w = 1.3;
+        kp_x = 0.6;
+        kp_y = 1.8;
+        kp_w = 6;
         ki_x = 0.08;
-        ki_y = 0;
-        ki_w = 0;
-        kd_x = 0;
-        kd_y = 0;
-        kd_w = 0;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -4, 4);
-        vy = final_lap_detected ? 0.0 : constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
-        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -8, 8);
-      } else if (state == BACKWARD) { // BACKWARD IS GUD
-        kp_x = 0.35;
-        kp_y = 0.6;
-        kp_w = 0.8;
-        ki_x = 0.08;
-        ki_y = 0;
-        ki_w = 0;
-        kd_x = 0;
-        kd_y = 0;
-        kd_w = 0;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -4, 4);
-        vy = final_lap_detected ? 0.0 : constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
-        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -8, 8);
-      } else {
-        kp_x = 0;
-        kp_y = 0.5;
-        kp_w = 0.5;
-        ki_x = 0.12;
-        ki_y = 0.12;
-        ki_w = 0;
-        kd_x = 0;
-        kd_y = 0.04;
+        ki_y = 0.05;
+        ki_w = 0.1;
+        kd_x = 0.05;
+        kd_y = 0.05;
         kd_w = 0.05;
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -7, 7);
+        vy = final_lap_detected ? 0.0 : constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -15, 15);
+        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -16, 16);
+      } else if (state == BACKWARD) { // BACKWARD IS GUD
+        kp_x = 0.6;
+        kp_y = 1.8;
+        kp_w = 6;
+        ki_x = 0.08;
+        ki_y = 0.08;
+        ki_w = 0.1;
+        kd_x = 0.05;
+        kd_y = 0.05;
+        kd_w = 0.05;
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -7, 7);
+        vy = final_lap_detected ? 0.0 : constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -20, 20);
+        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -16, 16);
+      } else {
+        kp_x = 0.5;
+        kp_y = 0.4;
+        kp_w = 4;
+        ki_x = 0.08;
+        ki_y = 0.08;
+        ki_w = 0.1;
+        kd_x = 0.05;
+        kd_y = 0.04;
+        kd_w = 0.05;
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -5, 5);
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -5, 5);
-        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -9, 9);
+        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -12, 12);
       }
 
       if (final_lap_detected) {
@@ -478,7 +474,6 @@ void InverseKinematics() {
       drive(theta1, theta2, theta3, theta4);
     }
   }
-  delay(500);
 }
 
 float median3(float a, float b, float c) {
@@ -529,7 +524,7 @@ void realignWithSideIR() {
 
     if (abs(diff) <= tolerance) {
       stop();
-      delay(250);
+      //delay(250); CHECK THISSSSSSSSSSSSSSSSSSSSSSS
 
       zeroHeading();
       readOrientation();         // get current aligned heading
@@ -583,12 +578,12 @@ void rotateToAngle(float wall_heading) {
   readOrientation();
   float error = angleDiff(wall_heading, heading);
 
-  while (abs(error) > 1.0) {
+  while (abs(error) > 3.0) {
     readOrientation();
     error = angleDiff(wall_heading, heading);
 
-    float turnSpeed = (int)(3.2 * abs(error));
-    turnSpeed = constrain(turnSpeed, 60, 150);
+    float turnSpeed = (int)(3.8 * abs(error));
+    turnSpeed = constrain(turnSpeed, 60, 250);
 
     if (error > 0) {
       rotateCCWRaw(turnSpeed);
@@ -599,13 +594,12 @@ void rotateToAngle(float wall_heading) {
   }
 
   stop();
-  delay(120);
 
   // Fine correction pass in case of overshoot/coast
   readOrientation();
   error = angleDiff(wall_heading, heading);
 
-  while (abs(error) > 1) {
+  while (abs(error) > 3) {
     readOrientation();
     error = angleDiff(wall_heading, heading);
 
@@ -620,9 +614,9 @@ void rotateToAngle(float wall_heading) {
       rotateCWRaw(turnSpeed);
     }
 
-    delay(10);
+    delay(5);
     stop();
-    delay(25);
+    delay(10);
   }
   stop();
 }
@@ -790,7 +784,7 @@ void drive(float t1, float t2, float t3, float t4) {
 }
 
 float read_sonar_median() { 
-  const int N = 7;   // must be odd
+  const int N = 3;   // must be odd
   float readings[N];
 
   // Collect readings
