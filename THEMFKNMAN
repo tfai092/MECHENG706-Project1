@@ -70,13 +70,15 @@ float theta1, theta2, theta3, theta4;
 float Rw = 0.025;
 float L = 0.1525;
 float l = 0.09;
-float distance_from_wall = 8;
+float distance_from_wall = 7.75;
 float w_error_integral = 0.0;
 float x_error_integral = 0.0;
 float y_error_integral = 0.0;
 float w_error_prev = 0.0;
 float x_error_prev = 0.0;
 float y_error_prev = 0.0;
+float last_valid_lane_sonar = 0.0;
+bool lane_sonar_initialized = false;
 
 float w_error_derivative = 0.0;
 float x_error_derivative = 0.0;
@@ -88,6 +90,7 @@ bool heading_filter_initialized = false;
 
 bool MAP_ORIENTATION;
 bool final_lap_detected = false;
+int final_lap_consistent_count = 0;
 
 #define MAP_LENGTH 200
 #define MAP_WIDTH 110
@@ -243,7 +246,12 @@ void homing() {
 
 void InverseKinematics() {
   float w_error, x_error, y_error, overall_error;
-  distance_y = read_sonar_median();
+  if ((prevState == HOMING) || (state == HOMING)) {
+    distance_y = read_sonar_median();
+    BluetoothSerial.println("TINAS BAD");
+  } else {
+    distance_y = read_sonar_lane_filtered(distance_from_wall);
+  }
 
   if (state == BACKWARD) {
     signalADClong  = analogRead(REAR_LONG_IR_SENSOR);
@@ -286,7 +294,7 @@ void InverseKinematics() {
 
   prev_control_time = millis();
 
-  while (abs(overall_error) > 2.0) {
+  while (abs(overall_error) > 0.35) {
     unsigned long now = millis();
     if (now - prev_time >= 20) {  
       prev_time = now;
@@ -296,15 +304,24 @@ void InverseKinematics() {
       prev_control_time = now;
 
       readOrientation();
-      distance_y = read_sonar_median();
+      if ((prevState == HOMING) || (state == HOMING)) {
+        distance_y = read_sonar_median();
+      } else {
+        distance_y = read_sonar_lane_filtered(distance_from_wall);
+      }
 
       if (!final_lap_detected) {
         if (distance_y > 95 && distance_y < 105) {
+          final_lap_consistent_count++;
+        } else {
+          final_lap_consistent_count = 0;
+        }
+
+        if (final_lap_consistent_count >= 5) {
           final_lap_detected = true;
           BluetoothSerial.println("Final lap detected");
         }
       }
-
       if (state == FORWARD || prevState == FORWARD) {
         signalADCshort = analogRead(FRONT_SHORT_IR_SENSOR);
         signalADClong  = analogRead(FRONT_LONG_IR_SENSOR);
@@ -392,17 +409,17 @@ void InverseKinematics() {
       float omega;
 
       if (prevState == HOMING) {
-        kp_x = 1;
-        kp_y = 0.8;
-        kp_w = 4;
+        kp_x = 1.5;
+        kp_y = 0.5;
+        kp_w = 6;
         ki_x = 0;
         ki_y = 0;
         ki_w = 0;
         kd_x = 0;
         kd_y = 0;
         kd_w = 0;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -10, 10);
-        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -10, 10);
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -8, 8);
+        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -8, 8);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -4, 4);
       } else if (state == FORWARD) {
         kp_x = 0.9;
@@ -431,7 +448,7 @@ void InverseKinematics() {
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -25, 25);
       } else {
-        kp_x = 0.2;
+        kp_x = 0.8;
         kp_y = 1.5;
         kp_w = 4;
         ki_x = 0.08;
@@ -441,8 +458,8 @@ void InverseKinematics() {
         kd_y = 0.04;
         kd_w = 0.05;
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -5, 5);
-        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -12, 12);
-        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -14, 14);
+        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -10, 10);
+        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -18, 18);
       }
   
       theta1 = (1.0 / Rw) * (vx - vy - ((L + l) * omega));   // front left
@@ -498,9 +515,9 @@ float readShortIRcm(int pin) {
 }
 
 void realignWithSideIR() {
-  const float tolerance = 0.3;      
-  const float turnSpeed = 60;       
-  const unsigned long timeout_ms = 4000;
+  const float tolerance = 0.2;      
+  const float turnSpeed = 70;       
+  const unsigned long timeout_ms = 6000;
 
   unsigned long t0 = millis();
 
@@ -794,6 +811,24 @@ float read_sonar_median() {
 
   // Return median
   return readings[N / 2];
+}
+
+float read_sonar_lane_filtered(float expected_distance) {
+  float d = read_sonar_median();
+
+  // reject nonsense readings
+  if (d < 2.0 || d > 250.0) {
+    return lane_sonar_initialized ? last_valid_lane_sonar : expected_distance;
+  }
+
+  // reject readings too far from expected lane position
+  if (abs(d - expected_distance) > 10.0) {
+    return lane_sonar_initialized ? last_valid_lane_sonar : expected_distance;
+  }
+
+  last_valid_lane_sonar = d;
+  lane_sonar_initialized = true;
+  return d;
 }
 
 float readShortIRMedian(int pin) {
