@@ -467,20 +467,19 @@ void moveLeft() {
 }
 
 void driveBackwardStraight() {
-    float Kp_heading = 2;  // gyro heading correction gain
-    float Kp_wall    = 2;  // wall distance correction gain
+    float Kp_heading = 1.5;  // gyro heading correction gain
+    float Kp_wall    = 1.5;  // wall distance correction gain
     float target_distance = distance_from_wall;
 
     // Initialize heading reference
     readOrientation();
-    float target_heading = heading;
 
     float distance = readIRMedian(REAR_LONG_IR_SENSOR);  // use IR to detect end
     float wall_distance = read_sonar();                 // sonar for wall parallel
 
     while (distance > 20) {  // stop at end of lawn
         readOrientation();
-        float heading_error = angleDiff(target_heading, heading);
+        float heading_error = angleDiff(best_heading, heading);
 
         // Update distances
         distance = readIRMedian(REAR_LONG_IR_SENSOR);  // IR for end-of-path
@@ -492,10 +491,10 @@ void driveBackwardStraight() {
         float correction_wall    = Kp_wall * distance_error;
 
         // Wheel commands for mecanum drive
-        float left_front = 180 + correction_heading - correction_wall;
-        float right_front = 180 - correction_heading + correction_wall;
-        float left_rear   = 180 + correction_heading + correction_wall;
-        float right_rear  = 180 - correction_heading - correction_wall;
+        float left_front = 180 + correction_heading + correction_wall;
+        float right_front = 180 - correction_heading - correction_wall;
+        float left_rear   = 180 + correction_heading - correction_wall;
+        float right_rear  = 180 - correction_heading + correction_wall;
 
         DriveBackward(left_front, left_rear, right_front, right_rear);
 
@@ -507,20 +506,19 @@ void driveBackwardStraight() {
 }
 
 void driveForwardStraight() {
-    float Kp_heading = 2;  // gyro heading correction gain
-    float Kp_wall    = 2;  // wall distance correction gain
+    float Kp_heading = 1.5;  // gyro heading correction gain
+    float Kp_wall    = 1.5;  // wall distance correction gain
     float target_distance = distance_from_wall;
 
     // Initialize heading reference
     readOrientation();
-    float target_heading = heading;
 
     float distance = readIRMedian(FRONT_LONG_IR_SENSOR);  // IR for end-of-path
     float wall_distance = read_sonar();                 // sonar for wall distance
 
     while (distance > 20) {  // stop at end of lawn
         readOrientation();
-        float heading_error = angleDiff(target_heading, heading);
+        float heading_error = angleDiff(best_heading, heading);
 
         // Update distances
         distance = readIRMedian(FRONT_LONG_IR_SENSOR);  // IR for forward end
@@ -532,10 +530,10 @@ void driveForwardStraight() {
         float correction_wall    = Kp_wall * distance_error;
 
         // Wheel commands for mecanum drive
-        float left_front  = 180 - correction_heading - correction_wall;
-        float right_front = 180 + correction_heading + correction_wall;
-        float left_rear   = 180 - correction_heading + correction_wall;
-        float right_rear  = 180 + correction_heading - correction_wall;
+        float left_front  = 180 - correction_heading + correction_wall;
+        float right_front = 180 + correction_heading - correction_wall;
+        float left_rear   = 180 - correction_heading - correction_wall;
+        float right_rear  = 180 + correction_heading + correction_wall;
 
         Driveforward(left_front, left_rear, right_front, right_rear);
 
