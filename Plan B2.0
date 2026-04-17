@@ -491,10 +491,10 @@ void driveBackwardStraight() {
         float correction_wall    = Kp_wall * distance_error;
 
         // Wheel commands for mecanum drive
-        float left_front = 180 + correction_heading + correction_wall;
-        float right_front = 180 - correction_heading - correction_wall;
-        float left_rear   = 180 + correction_heading - correction_wall;
-        float right_rear  = 180 - correction_heading + correction_wall;
+        float left_front = 180 + correction_heading - correction_wall;
+        float right_front = 180 - correction_heading + correction_wall;
+        float left_rear   = 180 + correction_heading + correction_wall;
+        float right_rear  = 180 - correction_heading - correction_wall;
 
         DriveBackward(left_front, left_rear, right_front, right_rear);
 
@@ -530,10 +530,10 @@ void driveForwardStraight() {
         float correction_wall    = Kp_wall * distance_error;
 
         // Wheel commands for mecanum drive
-        float left_front  = 180 - correction_heading + correction_wall;
-        float right_front = 180 + correction_heading - correction_wall;
-        float left_rear   = 180 - correction_heading - correction_wall;
-        float right_rear  = 180 + correction_heading + correction_wall;
+        float left_front  = 180 - correction_heading - correction_wall;
+        float right_front = 180 + correction_heading + correction_wall;
+        float left_rear   = 180 - correction_heading + correction_wall;
+        float right_rear  = 180 + correction_heading - correction_wall;
 
         Driveforward(left_front, left_rear, right_front, right_rear);
 
