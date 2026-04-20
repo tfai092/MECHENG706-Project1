@@ -294,7 +294,7 @@ void InverseKinematics() {
 
   prev_control_time = millis();
 
-  while (abs(overall_error) > 0.2) {
+  while (abs(overall_error) > 0.12) {
     unsigned long now = millis();
     if (now - prev_time >= 20) {  
       prev_time = now;
@@ -425,11 +425,11 @@ void InverseKinematics() {
         kp_x = 0.9;
         kp_y = 1.5;
         kp_w = 6;
-        ki_x = 0.08;
+        ki_x = 0.09;
         ki_y = 0.05;
         ki_w = 0.1;
-        kd_x = 0.05;
-        kd_y = 0.05;
+        kd_x = 0.1;
+        kd_y = 0.06;
         kd_w = 0.05;
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -7, 7);
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
@@ -438,11 +438,11 @@ void InverseKinematics() {
         kp_x = 0.9;
         kp_y = 1.5;
         kp_w = 6;
-        ki_x = 0.08;
+        ki_x = 0.09;
         ki_y = 0.08;
         ki_w = 0.1;
-        kd_x = 0.05;
-        kd_y = 0.05;
+        kd_x = 0.1;
+        kd_y = 0.06;
         kd_w = 0.05;
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -7, 7);
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
@@ -451,11 +451,11 @@ void InverseKinematics() {
         kp_x = 0.8;
         kp_y = 1.5;
         kp_w = 4;
-        ki_x = 0.08;
+        ki_x = 0.09;
         ki_y = 0.1;
         ki_w = 0.1;
-        kd_x = 0.05;
-        kd_y = 0.04;
+        kd_x = 0.1;
+        kd_y = 0.1;
         kd_w = 0.05;
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -5, 5);
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -10, 10);
@@ -776,8 +776,7 @@ float read_sonar() {
   duration = pulseIn(echoPin, HIGH);
 
   // Convert time to distance
-  distance_cm = (duration - 231.46) / 56.142;
-
+  distance_cm = (duration - 224.47) / 56.599;
   return distance_cm;
 }
 
