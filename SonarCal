@@ -1,0 +1,187 @@
+#include <Servo.h>  //Need for Servo pulse output
+
+float rad = 0.0;
+
+//Default motor control pins
+const byte left_front = 46;
+const byte left_rear = 47;
+const byte right_rear = 50;
+const byte right_front = 51;
+
+//Ultrasonic sensor pins
+const int trigPin = 48;
+const int echoPin = 49;
+
+//Servo objects
+Servo left_font_motor;
+Servo left_rear_motor;
+Servo right_rear_motor;
+Servo right_font_motor;
+Servo turret_motor;
+
+int speed_val = 100;
+
+// Bluetooth serial
+#define BT Serial1
+
+// -------- Median buffer --------
+#define SAMPLE_SIZE 200
+unsigned long duration_samples[SAMPLE_SIZE];
+int sample_index = 0;
+
+unsigned long duration;  // raw time (µs)
+
+void setup(void) {
+  turret_motor.attach(11);
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  pinMode(trigPin, OUTPUT);
+  digitalWrite(trigPin, LOW);
+  pinMode(echoPin, INPUT);
+
+  BT.begin(115200);
+  BT.println("START");
+
+  enable_motors();
+  forward();
+
+  delay(1000);
+}
+
+void loop() {
+  stop();
+
+  // Optional stop command
+  if (BT.available()) {
+    byte serialRead = BT.read();
+    if (serialRead == '1') {
+      stop();
+    }
+  }
+
+  // Take reading
+  read_sonar();
+
+  // Store in buffer
+  duration_samples[sample_index++] = duration;
+
+  // Once 50 samples collected
+  if (sample_index >= SAMPLE_SIZE) {
+    unsigned long median = compute_median();
+
+    // Print ONLY median duration
+    BT.println(median);
+
+    // Reset buffer index
+    sample_index = 0;
+  }
+
+  delay(50);
+}
+
+//---------------- RAW SONAR ----------------//
+
+void read_sonar() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  duration = pulseIn(echoPin, HIGH);
+}
+
+//---------------- MEDIAN FUNCTION ----------------//
+
+unsigned long compute_median() {
+  unsigned long temp[SAMPLE_SIZE];
+
+  // Copy array
+  for (int i = 0; i < SAMPLE_SIZE; i++) {
+    temp[i] = duration_samples[i];
+  }
+
+  // Simple sort (bubble sort)
+  for (int i = 0; i < SAMPLE_SIZE - 1; i++) {
+    for (int j = i + 1; j < SAMPLE_SIZE; j++) {
+      if (temp[j] < temp[i]) {
+        unsigned long t = temp[i];
+        temp[i] = temp[j];
+        temp[j] = t;
+      }
+    }
+  }
+
+  return temp[SAMPLE_SIZE / 2];
+}
+
+//---------------- MOTOR CONTROL ----------------//
+
+void disable_motors() {
+  left_font_motor.detach();
+  left_rear_motor.detach();
+  right_rear_motor.detach();
+  right_font_motor.detach();
+
+  pinMode(left_front, INPUT);
+  pinMode(left_rear, INPUT);
+  pinMode(right_rear, INPUT);
+  pinMode(right_front, INPUT);
+}
+
+void enable_motors() {
+  left_font_motor.attach(left_front);
+  left_rear_motor.attach(left_rear);
+  right_rear_motor.attach(right_rear);
+  right_font_motor.attach(right_front);
+}
+
+void stop() {
+  left_font_motor.writeMicroseconds(1500);
+  left_rear_motor.writeMicroseconds(1500);
+  right_rear_motor.writeMicroseconds(1500);
+  right_font_motor.writeMicroseconds(1500);
+}
+
+void forward() {
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
+}
+
+void reverse() {
+  left_font_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_font_motor.writeMicroseconds(1500 + speed_val);
+}
+
+void ccw() {
+  left_font_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
+}
+
+void cw() {
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_font_motor.writeMicroseconds(1500 + speed_val);
+}
+
+void strafe_left() {
+  left_font_motor.writeMicroseconds(1500 - speed_val);
+  left_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_rear_motor.writeMicroseconds(1500 + speed_val);
+  right_font_motor.writeMicroseconds(1500 - speed_val);
+}
+
+void strafe_right() {
+  left_font_motor.writeMicroseconds(1500 + speed_val);
+  left_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_rear_motor.writeMicroseconds(1500 - speed_val);
+  right_font_motor.writeMicroseconds(1500 + speed_val);
+}
