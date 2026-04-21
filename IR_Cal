@@ -1,0 +1,42 @@
+#include <Servo.h>
+#include <SoftwareSerial.h>
+
+// Long IR sensor pins
+const int FRONT_LONG_IR_SENSOR = A12;
+const int REAR_LONG_IR_SENSOR  = A13;
+
+// Bluetooth pins
+#define BLUETOOTH_RX 19
+#define BLUETOOTH_TX 18
+
+SoftwareSerial BluetoothSerial(BLUETOOTH_RX, BLUETOOTH_TX);
+
+int averageADC(int pin) {
+  long sum = 0;
+
+  for (int i = 0; i < 200; i++) {
+    sum += analogRead(pin);
+    delay(2);  // small delay for stability
+  }
+
+  return sum / 200;
+}
+
+void setup(void) {
+  BluetoothSerial.begin(115200);
+  BluetoothSerial.println("Calibration Mode: Averaging 200 samples");
+  delay(1000);
+}
+
+void loop() {
+  int signalADCfront = averageADC(FRONT_LONG_IR_SENSOR);
+  int signalADCrear  = averageADC(REAR_LONG_IR_SENSOR);
+
+  BluetoothSerial.print("Front ADC (avg): ");
+  BluetoothSerial.print(signalADCfront);
+
+  BluetoothSerial.print(" | Rear ADC (avg): ");
+  BluetoothSerial.println(signalADCrear);
+
+  delay(500); // slower output for easier logging
+}
