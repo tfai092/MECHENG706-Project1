@@ -294,7 +294,7 @@ void InverseKinematics() {
 
   prev_control_time = millis();
 
-  while (abs(overall_error) > 0.12) {
+  while (abs(overall_error) > 0.13) {
     unsigned long now = millis();
     if (now - prev_time >= 20) {  
       prev_time = now;
@@ -409,9 +409,9 @@ void InverseKinematics() {
       float omega;
 
       if (prevState == HOMING) {
-        kp_x = 1.5;
+        kp_x = 2.5;
         kp_y = 0.5;
-        kp_w = 6;
+        kp_w = 2;
         ki_x = 0;
         ki_y = 0;
         ki_w = 0;
@@ -422,43 +422,43 @@ void InverseKinematics() {
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -8, 8);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -4, 4);
       } else if (state == FORWARD) {
-        kp_x = 0.9;
+        kp_x = 1.1;
         kp_y = 1.5;
         kp_w = 6;
         ki_x = 0.09;
         ki_y = 0.05;
         ki_w = 0.1;
-        kd_x = 0.1;
-        kd_y = 0.06;
+        kd_x = 0.08;
+        kd_y = 0.08;
         kd_w = 0.05;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -7, 7);
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -8, 8);
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -25, 25);
       } else if (state == BACKWARD) { // BACKWARD IS GUD
-        kp_x = 0.9;
+        kp_x = 1.1;
         kp_y = 1.5;
         kp_w = 6;
         ki_x = 0.09;
         ki_y = 0.08;
         ki_w = 0.1;
-        kd_x = 0.1;
-        kd_y = 0.06;
+        kd_x = 0.08;
+        kd_y = 0.08;
         kd_w = 0.05;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -7, 7);
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, 8, 8);
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -25, 25);
       } else {
         kp_x = 0.8;
-        kp_y = 1.5;
+        kp_y = 1.6;
         kp_w = 4;
-        ki_x = 0.09;
-        ki_y = 0.1;
-        ki_w = 0.1;
-        kd_x = 0.1;
-        kd_y = 0.1;
-        kd_w = 0.05;
+        ki_x = 0.06;
+        ki_y = 0.06;
+        ki_w = 0.08;
+        kd_x = 0.08;
+        kd_y = 0.08;
+        kd_w = 0.03;
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -5, 5);
-        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -10, 10);
+        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -11, 11);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -18, 18);
       }
   
@@ -776,7 +776,7 @@ float read_sonar() {
   duration = pulseIn(echoPin, HIGH);
 
   // Convert time to distance
-  distance_cm = (duration - 224.47) / 56.599;
+  distance_cm = (duration - 216) / 56.8;
   return distance_cm;
 }
 
