@@ -246,9 +246,8 @@ void homing() {
 
 void InverseKinematics() {
   float w_error, x_error, y_error, overall_error;
-  if ((prevState == HOMING) || (state == HOMING)) {
+  if ((prevState == HOMING) || (state == HOMING) || (state == LEFT)) {
     distance_y = read_sonar_median();
-    BluetoothSerial.println("TINAS BAD");
   } else {
     distance_y = read_sonar_lane_filtered(distance_from_wall);
   }
@@ -294,7 +293,7 @@ void InverseKinematics() {
 
   prev_control_time = millis();
 
-  while (abs(overall_error) > 0.13) {
+  while (abs(overall_error) > 0.15) {
     unsigned long now = millis();
     if (now - prev_time >= 20) {  
       prev_time = now;
@@ -304,7 +303,7 @@ void InverseKinematics() {
       prev_control_time = now;
 
       readOrientation();
-      if ((prevState == HOMING) || (state == HOMING)) {
+      if ((prevState == HOMING) || (state == HOMING)  || (state == LEFT)) {
         distance_y = read_sonar_median();
       } else {
         distance_y = read_sonar_lane_filtered(distance_from_wall);
@@ -425,41 +424,41 @@ void InverseKinematics() {
         kp_x = 1.1;
         kp_y = 1.5;
         kp_w = 6;
-        ki_x = 0.09;
-        ki_y = 0.05;
-        ki_w = 0.1;
-        kd_x = 0.08;
-        kd_y = 0.08;
+        ki_x = 0.12;
+        ki_y = 0.08;
+        ki_w = 0.12;
+        kd_x = 0.05;
+        kd_y = 0.05;
         kd_w = 0.05;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -8, 8);
-        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -9, 9);
+        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -7.5, 7.5);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -25, 25);
       } else if (state == BACKWARD) { // BACKWARD IS GUD
         kp_x = 1.1;
         kp_y = 1.5;
         kp_w = 6;
-        ki_x = 0.09;
+        ki_x = 0.12;
         ki_y = 0.08;
-        ki_w = 0.1;
-        kd_x = 0.08;
-        kd_y = 0.08;
+        ki_w = 0.12;
+        kd_x = 0.05;
+        kd_y = 0.05;
         kd_w = 0.05;
-        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, 8, 8);
-        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -6, 6);
+        vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -9, 9);
+        vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -7.5, 7.5);
         omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -25, 25);
       } else {
         kp_x = 0.8;
-        kp_y = 1.6;
-        kp_w = 4;
-        ki_x = 0.06;
-        ki_y = 0.06;
-        ki_w = 0.08;
-        kd_x = 0.08;
-        kd_y = 0.08;
-        kd_w = 0.03;
+        kp_y = 1.2;
+        kp_w = 3;
+        ki_x = 0.1;
+        ki_y = 0.12;
+        ki_w = 0.12;
+        kd_x = 0.05;
+        kd_y = 0.04;
+        kd_w = 0.05;
         vx = constrain(kp_x * x_error + ki_x * x_error_integral + kd_x * x_error_derivative, -5, 5);
         vy = constrain(kp_y * y_error + ki_y * y_error_integral + kd_y * y_error_derivative, -11, 11);
-        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -18, 18);
+        omega = constrain(kp_w * w_error + ki_w * w_error_integral + kd_w * w_error_derivative, -17, 17);
       }
   
       theta1 = (1.0 / Rw) * (vx - vy - ((L + l) * omega));   // front left
