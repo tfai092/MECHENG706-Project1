@@ -263,7 +263,7 @@ void InverseKinematics() {
   readOrientation();
 
 
-  x_error = current_distance - 10.0;
+  x_error = current_distance - 8.5;
   y_error = distance_y - distance_from_wall;
   w_error = angleDiff(wall_heading, heading);
 
@@ -332,30 +332,30 @@ void InverseKinematics() {
       current_distance = distance_long;
 
       if (state == FORWARD) {
-        x_error = current_distance - 10.0;
+        x_error = current_distance - 8,5;
         y_error = distance_y - distance_from_wall;
         w_error = angleDiff(wall_heading, heading);
       } else if (state == BACKWARD) {
-        x_error = 10.0 - current_distance;
+        x_error = 8.5 - current_distance;
         y_error = distance_y - distance_from_wall;
         w_error = angleDiff(wall_heading, heading);
       } else if (state == RIGHT) {
         if (prevState == FORWARD) {
-          x_error = current_distance - 10.0;
+          x_error = current_distance - 8.5;
           y_error = distance_y - distance_from_wall;
           w_error = angleDiff(wall_heading, heading);
         } else {
-          x_error = 10.0 - current_distance;
+          x_error = 8.5 - current_distance;
           y_error = distance_y - distance_from_wall;
           w_error = angleDiff(wall_heading, heading);
         }
       } else if (state == LEFT) {
         if (prevState == FORWARD) {
-          x_error = current_distance - 10.0;
+          x_error = current_distance - 8.5;
           y_error = distance_y - distance_from_wall;
           w_error = angleDiff(wall_heading, heading);
         } else {
-          x_error = 10.0 - current_distance;
+          x_error = 8.5 - current_distance;
           y_error = distance_y - distance_from_wall;
           w_error = angleDiff(wall_heading, heading);
         }
@@ -862,7 +862,6 @@ void rotateCWRaw(float speed_cmd) {
   right_rear_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
   right_front_motor.writeMicroseconds(1500 + kp_rotation * speed_cmd);
 }
-
 void logWallAndSonar() {
   if (prevState == HOMING || state == LEFT) return;
 
@@ -883,86 +882,92 @@ void logWallAndSonar() {
   const float IR_MIN = 8.0;
   const float IR_MAX = 80.0;
   const float MAP_SIZE = 200.0;
+  const float SWITCH_DIST = 60.0;
 
   bool front_valid = (front_dist > IR_MIN && front_dist < IR_MAX);
   bool rear_valid  = (rear_dist  > IR_MIN && rear_dist  < IR_MAX);
 
-  static float last_x = 0.0;
   static bool initialized = false;
-  static bool x_increases_in_forward = true;   // decided once after homing
+  static bool x_increases_in_forward = true;
 
-  float x;
-  char source = 'H';
-
-  // Decide ONCE which direction increases x:
-  // if first travel state is FORWARD, then FORWARD increases x
-  // if first travel state is BACKWARD, then BACKWARD increases x
+  // Decide once which motion direction corresponds to increasing x
   if (!initialized) {
     if (state == FORWARD) {
       x_increases_in_forward = true;
+      initialized = true;
     } else if (state == BACKWARD) {
       x_increases_in_forward = false;
+      initialized = true;
     }
   }
+
+  float x = 0.0;
+  bool should_print = false;
 
   if (x_increases_in_forward) {
-    // FORWARD => x increases away from start wall
-    // BACKWARD => x decreases toward start wall
-    float x_from_start_wall = rear_dist;           // near start wall
-    float x_from_far_wall   = MAP_SIZE - front_dist; // near far wall
+    // FORWARD: x goes 0 -> 200
+    // BACKWARD: x goes 200 -> 0
 
-    if (front_valid && rear_valid) {
-      x = 0.5 * (x_from_start_wall + x_from_far_wall);
-      source = 'B';
+    if (state == FORWARD) {
+      // Start: use opposite sensor = REAR
+      if (rear_valid && rear_dist <= SWITCH_DIST) {
+        x = rear_dist;                  // absolute x from start wall
+        should_print = true;
+      }
+      // End: use FRONT once near far wall
+      else if (front_valid && front_dist <= SWITCH_DIST) {
+        x = MAP_SIZE - front_dist;      // absolute x near far wall
+        should_print = true;
+      }
     }
-    else if (rear_valid) {
-      x = x_from_start_wall;
-      source = 'R';
-    }
-    else if (front_valid) {
-      x = x_from_far_wall;
-      source = 'F';
-    }
-    else {
-      x = initialized ? last_x : 0.0;
-      source = 'H';
+
+    else if (state == BACKWARD) {
+      // Start: use opposite sensor = FRONT
+      if (front_valid && front_dist <= SWITCH_DIST) {
+        x = MAP_SIZE - front_dist;      // starting near far wall
+        should_print = true;
+      }
+      // End: use REAR once near start wall
+      else if (rear_valid && rear_dist <= SWITCH_DIST) {
+        x = rear_dist;                  // ending near start wall
+        should_print = true;
+      }
     }
   } else {
-    // BACKWARD => x increases away from start wall
-    // FORWARD  => x decreases toward start wall
-    float x_from_start_wall = front_dist;            // near start wall
-    float x_from_far_wall   = MAP_SIZE - rear_dist;  // near far wall
+    // BACKWARD: x goes 0 -> 200
+    // FORWARD:  x goes 200 -> 0
 
-    if (front_valid && rear_valid) {
-      x = 0.5 * (x_from_start_wall + x_from_far_wall);
-      source = 'B';
+    if (state == BACKWARD) {
+      // Start: use opposite sensor = FRONT
+      if (front_valid && front_dist <= SWITCH_DIST) {
+        x = front_dist;                 // absolute x from start wall
+        should_print = true;
+      }
+      // End: use REAR once near far wall
+      else if (rear_valid && rear_dist <= SWITCH_DIST) {
+        x = MAP_SIZE - rear_dist;       // absolute x near far wall
+        should_print = true;
+      }
     }
-    else if (front_valid) {
-      x = x_from_start_wall;
-      source = 'F';
-    }
-    else if (rear_valid) {
-      x = x_from_far_wall;
-      source = 'R';
-    }
-    else {
-      x = initialized ? last_x : 0.0;
-      source = 'H';
+
+    else if (state == FORWARD) {
+      // Start: use opposite sensor = REAR
+      if (rear_valid && rear_dist <= SWITCH_DIST) {
+        x = MAP_SIZE - rear_dist - 6.5;       // starting near far wall
+        should_print = true;
+      }
+      // End: use FRONT once near start wall
+      else if (front_valid && front_dist <= SWITCH_DIST) {
+        x = front_dist + 6.5;                 // ending near start wall
+        should_print = true;
+      }
     }
   }
 
-  if (source != 'H') {
-    last_x = x;
-    initialized = true;
+  if (should_print) {
+    x = constrain(x, 0.0, MAP_SIZE);
+    BluetoothSerial.print(x);
+    BluetoothSerial.print("\t");
+    BluetoothSerial.println(sonar + 10.5);
   }
-
-  x = constrain(x, 0.0, MAP_SIZE);
-
-  // ---------------- OUTPUT ----------------
-// ---------------- OUTPUT ----------------
-if (source != 'H') {
-  BluetoothSerial.print(x);
-  BluetoothSerial.print("\t");
-  BluetoothSerial.println(sonar);
-}
 }
