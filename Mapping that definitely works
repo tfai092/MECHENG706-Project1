@@ -20,6 +20,9 @@ float robot_x = 0.0;   // cm
 float robot_y = 0.0;   // cm
 float robot_theta = 0.0; // deg (from gyro)
 
+float omega;
+float dt_sec;
+
 unsigned long last_pose_update = 0;
 unsigned long last_pose_print = 0;
 
@@ -252,21 +255,6 @@ void homing() {
   }
 }
 
-void updateRobotPose(float vx, float vy, float omega, float dt_sec) {
-  // Use gyro as absolute heading (more stable than integrating omega)
-  robot_theta = heading;
-
-  float theta_rad = robot_theta * PI / 180.0;
-
-  // Convert robot-frame velocity → world-frame velocity
-  float vx_world = vx * cos(theta_rad) - vy * sin(theta_rad);
-  float vy_world = vx * sin(theta_rad) + vy * cos(theta_rad);
-
-  // Integrate position
-  robot_x += vx_world * dt_sec;
-  robot_y += vy_world * dt_sec;
-}
-
 void InverseKinematics() {
   float w_error, x_error, y_error, overall_error;
   if ((prevState == HOMING) || (state == HOMING) || (state == LEFT)) {
@@ -322,7 +310,7 @@ void InverseKinematics() {
       prev_time = now;
 
       // time step for integral
-      float dt_sec = (now - prev_control_time) / 1000.0;
+      dt_sec = (now - prev_control_time) / 1000.0;
       prev_control_time = now;
 
       readOrientation();
@@ -517,6 +505,21 @@ float median3(float a, float b, float c) {
   if (b > c) { float t = b; b = c; c = t; }
   if (a > b) { float t = a; a = b; b = t; }
   return b;
+}
+
+void updateRobotPose(float vx, float vy, float omega, float dt_sec) {
+  // Use gyro as absolute heading (more stable than integrating omega)
+  robot_theta = heading;
+
+  float theta_rad = robot_theta * PI / 180.0;
+
+  // Convert robot-frame velocity → world-frame velocity
+  float vx_world = vx * cos(theta_rad) - vy * sin(theta_rad);
+  float vy_world = vx * sin(theta_rad) + vy * cos(theta_rad);
+
+  // Integrate position
+  robot_x += vx_world * dt_sec;
+  robot_y += vy_world * dt_sec;
 }
 
 float unwrapToReference(float angle, float reference) {
