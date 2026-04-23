@@ -868,10 +868,13 @@ void logWallAndSonar() {
   static unsigned long last_log = 0;
   if (millis() - last_log < 100) return;
   last_log = millis();
-
+  float sonar;
   // ---------------- SONAR ----------------
-  float sonar = read_sonar();
-
+  if (state == FORWARD || state == BACKWARD) {
+    sonar = read_sonar_lane_filtered(distance_from_wall);
+  } else {
+    sonar = read_sonar();
+  }
   // ---------------- IR ----------------
   float front_adc = analogRead(FRONT_LONG_IR_SENSOR);
   float rear_adc  = analogRead(REAR_LONG_IR_SENSOR);
@@ -911,12 +914,12 @@ void logWallAndSonar() {
     if (state == FORWARD) {
       // Start: use opposite sensor = REAR
       if (rear_valid && rear_dist <= SWITCH_DIST) {
-        x = rear_dist;                  // absolute x from start wall
+        x = rear_dist + 6.5;                  // absolute x from start wall
         should_print = true;
       }
       // End: use FRONT once near far wall
       else if (front_valid && front_dist <= SWITCH_DIST) {
-        x = MAP_SIZE - front_dist;      // absolute x near far wall
+        x = MAP_SIZE - front_dist - 6.5;      // absolute x near far wall
         should_print = true;
       }
     }
@@ -924,12 +927,12 @@ void logWallAndSonar() {
     else if (state == BACKWARD) {
       // Start: use opposite sensor = FRONT
       if (front_valid && front_dist <= SWITCH_DIST) {
-        x = MAP_SIZE - front_dist;      // starting near far wall
+        x = MAP_SIZE - front_dist - 6.5 ;      // starting near far wall
         should_print = true;
       }
       // End: use REAR once near start wall
       else if (rear_valid && rear_dist <= SWITCH_DIST) {
-        x = rear_dist;                  // ending near start wall
+        x = rear_dist + 6.5;                  // ending near start wall
         should_print = true;
       }
     }
@@ -940,12 +943,12 @@ void logWallAndSonar() {
     if (state == BACKWARD) {
       // Start: use opposite sensor = FRONT
       if (front_valid && front_dist <= SWITCH_DIST) {
-        x = front_dist;                 // absolute x from start wall
+        x = front_dist + 6.5;                 // absolute x from start wall
         should_print = true;
       }
       // End: use REAR once near far wall
       else if (rear_valid && rear_dist <= SWITCH_DIST) {
-        x = MAP_SIZE - rear_dist;       // absolute x near far wall
+        x = MAP_SIZE - rear_dist - 6.5;       // absolute x near far wall
         should_print = true;
       }
     }
