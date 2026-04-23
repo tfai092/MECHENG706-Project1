@@ -22,6 +22,7 @@ float robot_theta = 0.0; // deg (from gyro)
 
 float omega;
 float dt_sec;
+float the_actual_previous_time;
 
 unsigned long last_pose_update = 0;
 unsigned long last_pose_print = 0;
@@ -307,6 +308,7 @@ void InverseKinematics() {
   while (abs(overall_error) > 0.15) {
     unsigned long now = millis();
     if (now - prev_time >= 20) {  
+      the_actual_previous_time = prev_time;
       prev_time = now;
 
       // time step for integral
@@ -488,7 +490,7 @@ void InverseKinematics() {
       }
       drive(theta1, theta2, theta3, theta4);
     }
-        if (now - prev_time >= 500) {
+        if (now - the_actual_prev_time >= 500) {
       updateRobotPose(vx, vy, omega, dt_sec);
         BluetoothSerial.print("POS X: ");
         BluetoothSerial.print(robot_x);
