@@ -1,0 +1,35 @@
+clc; clear; close all;
+
+data = [
+
+];
+
+% remove clearly bad points outside map / impossible jumps
+keep = data(:,1) >= 0 & data(:,1) <= 200 & data(:,2) >= 0 & data(:,2) <= 120;
+data = data(keep,:);
+% optional light cleanup for plotting
+x = medfilt1(data(:,1), 5);
+y = medfilt1(data(:,2), 5);
+data_clean = [x y];
+% use this in MATLAB from here on
+figure;
+plot(data(:,1), data(:,2), 'r:'); hold on;
+plot(data_clean(:,1), data_clean(:,2), 'b-', 'LineWidth', 1.5);
+xlim([0 200]); ylim([0 120]); axis equal; grid on;
+xlabel('X Position (cm)');
+ylabel('Y Position (cm)');
+legend('Raw parsed', 'Median filtered');
+title('Robot Trajectory');
+x = data(:,1);
+y = data(:,2);
+%% ---------------- FILTERING ----------------
+% 1. Remove spikes (median filter)
+x_med = medfilt1(x, 5);
+y_med = medfilt1(y, 5);
+% 2. Smooth trajectory (moving average)
+x_filt = smoothdata(x_med, 'movmean', 7);
+y_filt = smoothdata(y_med, 'movmean', 7);
+%% ---------------- PLOT ----------------
+figure;
+% Raw data (faint)
+plot(x, y, 'r:', 'LineWidth', 0.5); hold on;
